@@ -13,24 +13,66 @@
 </head>
 <body class="bg-slate-900 text-slate-100">
 
-    <!-- Auth Container -->
+    <!-- Authentication Screens -->
     <div id="auth-container" class="auth-wrapper">
-        <div class="auth-card">
-            <h2>E-Wallet Management</h2>
-            <form id="auth-form">
-                <div class="form-group">
-                    <label>Email Address</label>
-                    <input type="email" id="auth-email" placeholder="name@example.com" required>
-                </div>
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" id="auth-password" placeholder="••••••••" required>
-                </div>
-                <button type="submit" id="btn-login" class="btn btn-primary">Sign In</button>
-                <button type="button" id="btn-signup" class="btn btn-secondary">Create Account</button>
-                <p id="auth-message" class="error-msg"></p>
-            </form>
+        <div class="auth-brand-block">
+            <div class="brand-mark">💳</div>
+            <span class="auth-eyebrow">PERSONAL FINANCE WORKSPACE</span>
+            <h1>E-Wallet Management</h1>
+            <p>Keep income, salary, commitments, and everyday spending in one calm overview.</p>
         </div>
+
+        <section id="login-screen" class="auth-card auth-panel">
+            <div class="auth-panel-heading">
+                <span class="auth-kicker">Welcome back</span>
+                <h2>Sign in to your wallet</h2>
+                <p>Continue tracking your money where you left off.</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-email">Email Address</label>
+                    <input type="email" id="login-email" placeholder="name@example.com" autocomplete="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required>
+                </div>
+                <button type="submit" id="btn-login" class="btn btn-primary auth-submit">Sign In</button>
+                <p id="login-message" class="auth-message" role="status"></p>
+            </form>
+            <div class="auth-switch">
+                <span>New here?</span>
+                <button type="button" id="show-register" class="text-button">Create an account</button>
+            </div>
+        </section>
+
+        <section id="register-screen" class="auth-card auth-panel hidden">
+            <div class="auth-panel-heading">
+                <span class="auth-kicker">Start fresh</span>
+                <h2>Create your account</h2>
+                <p>Your wallet data stays connected to your own account.</p>
+            </div>
+            <form id="register-form">
+                <div class="form-group">
+                    <label for="register-email">Email Address</label>
+                    <input type="email" id="register-email" placeholder="name@example.com" autocomplete="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password">Password</label>
+                    <input type="password" id="register-password" placeholder="At least 6 characters" autocomplete="new-password" minlength="6" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-confirm-password">Confirm Password</label>
+                    <input type="password" id="register-confirm-password" placeholder="Repeat your password" autocomplete="new-password" minlength="6" required>
+                </div>
+                <button type="submit" class="btn btn-primary auth-submit">Create Account</button>
+                <p id="register-message" class="auth-message" role="status"></p>
+            </form>
+            <div class="auth-switch">
+                <span>Already have an account?</span>
+                <button type="button" id="show-login" class="text-button">Back to sign in</button>
+            </div>
+        </section>
     </div>
 
     <!-- Main App Layout -->
@@ -187,45 +229,108 @@
                 </div>
             </section>
 
-            <!-- Fixed Salary Section -->
+            <!-- Salary Section -->
             <section id="sec-salary" class="content-section hidden">
-                <h2>Fixed Salary</h2>
-                <div class="auth-card" style="max-width: 500px; margin-top: 20px;">
+                <div class="section-header salary-section-heading">
+                    <div>
+                        <span class="section-kicker">Income planning</span>
+                        <h2>Salary Center</h2>
+                        <p class="section-subtitle">Confirm what arrived today and keep next month ready as pending.</p>
+                    </div>
+                </div>
+
+                <div class="salary-overview-grid">
+                    <article class="salary-card salary-card-current">
+                        <div class="salary-card-topline">
+                            <span class="salary-card-label">This month</span>
+                            <span id="salary-current-status" class="status-badge salary-status-pending">Pending</span>
+                        </div>
+                        <p id="salary-current-month-label" class="salary-month-label">Current month</p>
+                        <strong id="salary-current-amount" class="salary-card-amount">$0</strong>
+                        <p id="salary-current-hint" class="salary-card-hint">Set the amount, then confirm when it reaches you.</p>
+                        <button type="button" id="btn-confirm-current-salary" class="btn btn-primary salary-card-button">Confirm salary received</button>
+                    </article>
+
+                    <article class="salary-card salary-card-next">
+                        <div class="salary-card-topline">
+                            <span class="salary-card-label">Next month</span>
+                            <span id="salary-next-status" class="status-badge salary-status-pending">Pending</span>
+                        </div>
+                        <p id="salary-next-month-label" class="salary-month-label">Next month</p>
+                        <strong id="salary-next-amount" class="salary-card-amount">$0</strong>
+                        <p id="salary-next-hint" class="salary-card-hint">It will be created automatically after you confirm this month.</p>
+                        <button type="button" id="btn-edit-next-salary" class="btn btn-secondary salary-card-button">Plan next month's salary</button>
+                    </article>
+                </div>
+
+                <div class="salary-form-card">
+                    <div class="salary-form-heading">
+                        <div>
+                            <h3>Salary plan</h3>
+                            <p>Save an amount as pending, or confirm it once the money is received.</p>
+                        </div>
+                        <span class="salary-rule-note">Only confirmed salary counts as available cash.</span>
+                    </div>
                     <form id="salary-form">
-                        <div class="form-group">
-                            <label>Month / Year</label>
-                            <input type="month" id="salary-month" required>
+                        <div class="salary-form-grid">
+                            <div class="form-group">
+                                <label for="salary-month">Month / Year</label>
+                                <input type="month" id="salary-month" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="salary-amount">Expected salary amount</label>
+                                <input type="number" min="0.01" step="0.01" id="salary-amount" placeholder="0.00" required>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Salary Amount ($)</label>
-                            <input type="number" id="salary-amount" placeholder="0.00" required>
+                        <div class="salary-form-actions">
+                            <button type="submit" id="btn-save-salary" class="btn btn-secondary">Save as pending</button>
+                            <button type="button" id="btn-confirm-salary" class="btn btn-primary">Confirm received</button>
                         </div>
-                        <div class="form-group" style="display: flex; gap: 10px; align-items: center;">
-                            <input type="checkbox" id="salary-received" style="width: auto;">
-                            <label for="salary-received" style="margin: 0;">Received for this month</label>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Save Salary Data</button>
+                        <p id="salary-form-message" class="form-success-message" role="status"></p>
                     </form>
+                </div>
+
+                <div class="salary-history-card">
+                    <div class="section-header compact-header">
+                        <div>
+                            <h3>Salary history</h3>
+                            <p class="section-subtitle">A quick view of planned and confirmed salary months.</p>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Month</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="salary-history-body"></tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
             <!-- Expenses Section -->
             <section id="sec-expenses" class="content-section hidden">
                 <div class="section-header">
-                    <h2>Fixed Expenses & Obligations</h2>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="btn-copy-expenses" class="btn btn-secondary" style="width: auto;">📋 Copy to Next Month</button>
-                        <button id="open-add-expense-modal" class="btn btn-primary" style="width: auto;">+ Add Expense</button>
+                    <div>
+                        <span class="section-kicker">Recurring commitments</span>
+                        <h2>Monthly Obligations</h2>
+                        <p class="section-subtitle">Set a start and end date once. Each active month appears automatically until you confirm it as paid.</p>
                     </div>
+                    <button id="open-add-expense-modal" class="btn btn-primary" style="width: auto;">+ Add obligation</button>
                 </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>Title</th>
+                                <th>Obligation</th>
                                 <th>Amount</th>
-                                <th>Due Date</th>
-                                <th>Status</th>
+                                <th>Due date</th>
+                                <th>Payment</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -365,14 +470,36 @@
     </div>
 
     <div id="modal-expense" class="modal hidden">
-        <div class="modal-content">
-            <h3>Add Fixed Expense</h3>
+        <div class="modal-content modal-wide">
+            <h3>Add Monthly Obligation</h3>
             <form id="form-expense">
-                <input type="text" id="expense-title" placeholder="Title (e.g., Internet, Rent)" required>
-                <input type="number" id="expense-amount" placeholder="Amount ($)" required>
-                <input type="date" id="expense-date">
+                <div class="form-group">
+                    <label for="expense-title">Obligation name</label>
+                    <input type="text" id="expense-title" placeholder="e.g. Internet, Rent, Subscription" required>
+                </div>
+                <div class="form-row expense-form-row">
+                    <div class="form-group">
+                        <label for="expense-amount">Monthly amount</label>
+                        <input type="number" min="0.01" step="0.01" id="expense-amount" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-start-date">Start date</label>
+                        <input type="date" id="expense-start-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-end-date">End date</label>
+                        <input type="date" id="expense-end-date" required>
+                    </div>
+                </div>
+                <label class="toggle-field" for="expense-recurring">
+                    <input type="checkbox" id="expense-recurring" checked>
+                    <span>
+                        <strong>Repeat every month</strong>
+                        <small id="expense-recurring-help">This obligation will appear automatically in every active month.</small>
+                    </span>
+                </label>
                 <div class="modal-actions">
-                    <button type="submit" class="btn btn-primary">Save Expense</button>
+                    <button type="submit" class="btn btn-primary">Save obligation</button>
                     <button type="button" class="btn btn-secondary close-modal">Cancel</button>
                 </div>
             </form>

@@ -5,6 +5,28 @@
 // 1. التنقل بين الأقسام عبر Sidebar
 const navItems = document.querySelectorAll('.nav-item');
 const contentSections = document.querySelectorAll('.content-section');
+const appSidebar = document.getElementById('app-sidebar');
+const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+const mobileNavOverlay = document.getElementById('mobile-nav-overlay');
+
+function setMobileMenu(open) {
+    if (!appSidebar || !mobileMenuToggle) return;
+    appSidebar.classList.toggle('mobile-menu-open', open);
+    mobileMenuToggle.setAttribute('aria-expanded', String(open));
+    mobileMenuToggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+    const icon = mobileMenuToggle.querySelector('i');
+    if (icon) {
+        icon.classList.toggle('fa-bars', !open);
+        icon.classList.toggle('fa-xmark', open);
+    }
+    if (mobileNavOverlay) mobileNavOverlay.classList.toggle('hidden', !open);
+    document.body.classList.toggle('mobile-nav-is-open', open);
+}
+
+mobileMenuToggle?.addEventListener('click', () => {
+    setMobileMenu(!appSidebar?.classList.contains('mobile-menu-open'));
+});
+mobileNavOverlay?.addEventListener('click', () => setMobileMenu(false));
 
 navItems.forEach(item => {
     item.addEventListener('click', () => {
@@ -27,7 +49,12 @@ navItems.forEach(item => {
         if (typeof refreshSectionData === 'function') {
             refreshSectionData(targetId);
         }
+        setMobileMenu(false);
     });
+});
+
+window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) setMobileMenu(false);
 });
 
 // 2. إدارة النوافذ المنبثقة (Modals)

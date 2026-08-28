@@ -79,9 +79,12 @@
     <div id="app-container" class="app-layout hidden">
         
         <!-- Sidebar Navigation -->
-        <aside class="sidebar">
+        <aside id="app-sidebar" class="sidebar">
             <div class="brand">
                 <span>💳 E-Wallet</span>
+                <button type="button" id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
             </div>
             <nav class="nav-menu">
                 <button class="nav-item active" data-target="sec-dashboard">📊 Dashboard</button>
@@ -94,6 +97,7 @@
             </nav>
             <button id="btn-logout" class="btn-logout">Sign Out</button>
         </aside>
+        <div id="mobile-nav-overlay" class="mobile-nav-overlay hidden"></div>
 
         <!-- Main Content View -->
         <main class="main-content">
@@ -198,7 +202,10 @@
                             <tr>
                                 <th>Client Name</th>
                                 <th>Total Budget</th>
-                                <th>Status</th>
+                                <th>Collected</th>
+                                <th>Remaining</th>
+                                <th>Tasks & Work Value</th>
+                                <th>Delivery Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -414,15 +421,39 @@
 
             <!-- Reports Section -->
             <section id="sec-reports" class="content-section hidden">
-                <div class="section-header">
-                    <h2>Monthly Reports</h2>
+                <div class="section-header report-section-heading">
+                    <div>
+                        <span class="section-kicker">Insights & planning</span>
+                        <h2>Reports Center</h2>
+                        <p class="section-subtitle">Choose exactly what you want to understand, or generate a complete monthly view.</p>
+                    </div>
                     <button id="btn-export-pdf" class="btn btn-primary" style="width: auto;">📄 Export PDF</button>
                 </div>
-                <div class="form-group" style="max-width: 300px;">
-                    <label>Select Month</label>
-                    <input type="month" id="report-month">
+
+                <div class="report-controls-card">
+                    <div class="report-controls-grid">
+                        <div class="form-group">
+                            <label for="report-type">Report type</label>
+                            <select id="report-type">
+                                <option value="comprehensive">Comprehensive monthly report</option>
+                                <option value="income">Income & collections</option>
+                                <option value="expenses">Expenses & obligations</option>
+                                <option value="salary">Salary report</option>
+                                <option value="movements">Money movements</option>
+                                <option value="clients">Clients & receivables</option>
+                                <option value="cashflow">Cash flow summary</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="report-month">Report month</label>
+                            <input type="month" id="report-month">
+                        </div>
+                        <button type="button" id="btn-generate-report" class="btn btn-primary report-generate-button">Generate report</button>
+                    </div>
+                    <p id="report-type-help" class="field-help">Includes confirmed income, expenses, salary, commitments, movements, and outstanding amounts.</p>
                 </div>
-                <div id="report-results" class="stat-card" style="margin-top: 20px;"></div>
+
+                <div id="report-results" class="report-results-shell"></div>
             </section>
 
         </main>
@@ -443,6 +474,16 @@
                 <div class="form-group" style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
                     <input type="checkbox" id="client-is-collected" style="width: auto;" checked>
                     <label for="client-is-collected" style="margin: 0; cursor: pointer;">Collected Amount (مُحصل)</label>
+                </div>
+                <div class="form-group">
+                    <label for="client-workflow-status">Work / delivery status</label>
+                    <select id="client-workflow-status">
+                        <option value="not_started">Not started</option>
+                        <option value="in_progress">Work in progress</option>
+                        <option value="partially_delivered">Partially delivered</option>
+                        <option value="paid_not_delivered">Paid — not delivered</option>
+                        <option value="delivered">Fully delivered</option>
+                    </select>
                 </div>
                 <div class="modal-actions" style="margin-top: 20px;">
                     <button type="submit" class="btn btn-primary">Save</button>

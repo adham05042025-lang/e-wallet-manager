@@ -591,22 +591,47 @@ async function editSalaryMonth(monthYear) {
 window.editSalaryMonth = editSalaryMonth;
 
 // 7. Monthly Obligations Module
-function recurringExpenseStorageKey() {
-    return `ewallet_recurring_obligations_${movementUserKey || 'local'}`;
-}
+let recurringObligationsCache = [];
+let obligationPaymentsCache = [];
 
 function readRecurringExpenses() {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(recurringExpenseStorageKey()) || '[]');
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-        console.error('Could not read recurring obligations:', error);
-        return [];
-    }
+    return recurringObligationsCache;
 }
 
-function writeRecurringExpenses(expenses) {
-    localStorage.setItem(recurringExpenseStorageKey(), JSON.stringify(expenses));
+async function initializeRecurringObligations() {
+    if (!movementUserKey) return;
+    const { data: obligations, error } = await supabaseClient.from('recurring_obligations').select('*').eq('user_id', movementUserKey).order('created_at', { ascending: false });
+    if (error) throw error;
+    const { data: payments, error: paymentError } = await supabaseClient.from('obligation_payments').select('*').eq('user_id', movementUserKey);
+    if (paymentError) throw paymentError;
+    obligationPaymentsCache = payments || [];
+    recurringObligationsCache = (obligations || []).map(item => ({
+        id: item.id, title: item.title, amount: Number(item.amount || 0), currency: item.currency || HOME_CURRENCY,
+        startDate: item.start_date, endDate: item.end_date, dueDay: item.day_of_month, frequency: item.frequency,
+        notes: item.notes, paidMonths: obligationPaymentsCache.filter(p => p.obligation_id === item.id && p.status === 'paid').map(p => String(p.due_month).slice(0, 7))
+    }));
+}
+
+async function saveRecurringExpense(expense) {
+    const row = { id: expense.id, user_id: movementUserKey, title: expense.title, amount: expense.amount, currency: expense.currency || HOME_CURRENCY, start_date: expense.startDate, end_date: expense.endDate, frequency: expense.frequency || 'monthly', day_of_month: expense.dueDay || 1, notes: expense.notes || null, is_active: true };
+    const { data, error } = await supabaseClient.from('recurring_obligations').upsert(row, { onConflict: 'id' }).select('*').single();
+    if (error) throw error;
+    const normalized = { ...expense, id: data.id };
+    recurringObligationsCache = [normalized, ...recurringObligationsCache.filter(item => item.id !== normalized.id)];
+    return normalized;
+}
+
+async function saveObligationPayment(obligation, monthYear, isPaid) {
+    const dueMonth = `${monthYear}-01`;
+    if (isPaid) {
+        const row = { obligation_id: obligation.id, user_id: movementUserKey, due_month: dueMonth, amount: obligation.amount, currency: obligation.currency || HOME_CURRENCY, status: 'paid', paid_at: new Date().toISOString() };
+        const { error } = await supabaseClient.from('obligation_payments').upsert(row, { onConflict: 'obligation_id,due_month' });
+        if (error) throw error;
+    } else {
+        const { error } = await supabaseClient.from('obligation_payments').delete().eq('obligation_id', obligation.id).eq('due_month', dueMonth);
+        if (error) throw error;
+    }
+    obligation.paidMonths = isPaid ? [...new Set([...(obligation.paidMonths || []), monthYear])] : (obligation.paidMonths || []).filter(item => item !== monthYear);
 }
 
 function monthFromDate(dateValue) {
@@ -726,18 +751,17 @@ document.getElementById('form-expense')?.addEventListener('submit', async (event
     }
 
     if (isRecurring) {
-        const recurringExpenses = readRecurringExpenses();
-        recurringExpenses.push({
-            id: `obligation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            title,
-            amount,
-            startDate,
-            endDate,
-            dueDay: Number(startDate.slice(8, 10)),
-            paidMonths: [],
-            createdAt: new Date().toISOString()
-        });
-        writeRecurringExpenses(recurringExpenses);
+        try {
+            await saveRecurringExpense({
+                title, amount, startDate, endDate,
+                dueDay: Number(startDate.slice(8, 10)),
+                frequency: 'monthly', currency: HOME_CURRENCY, paidMonths: []
+            });
+        } catch (error) {
+            console.error('Could not save recurring obligation:', error);
+            alert('Could not save this recurring obligation to Supabase.');
+            return;
+        }
     } else {
         await supabaseClient.from('expenses').insert([{
             title,
@@ -761,15 +785,15 @@ async function toggleExpensePaid(id, isPaid) {
 }
 
 async function toggleRecurringExpensePaid(id, monthYear, isPaid) {
-    const expenses = readRecurringExpenses();
-    const expense = expenses.find(item => item.id === id);
+    const expense = readRecurringExpenses().find(item => item.id === id);
     if (!expense) return;
-    const paidMonths = new Set(expense.paidMonths || []);
-    if (isPaid) paidMonths.add(monthYear);
-    else paidMonths.delete(monthYear);
-    expense.paidMonths = [...paidMonths].sort();
-    writeRecurringExpenses(expenses);
-    loadDashboardData();
+    try {
+        await saveObligationPayment(expense, monthYear, isPaid);
+        loadDashboardData();
+    } catch (error) {
+        console.error('Could not update obligation payment:', error);
+        alert('Could not update this payment in Supabase.');
+    }
 }
 
 async function deleteExpense(id) {
@@ -781,61 +805,61 @@ async function deleteExpense(id) {
 
 async function deleteRecurringExpense(id) {
     if (!confirm('Delete this recurring obligation and its future months?')) return;
-    writeRecurringExpenses(readRecurringExpenses().filter(expense => expense.id !== id));
+    const { error } = await supabaseClient.from('recurring_obligations').delete().eq('id', id);
+    if (error) return alert('Could not delete this obligation from Supabase.');
+    recurringObligationsCache = recurringObligationsCache.filter(expense => expense.id !== id);
     loadDashboardData();
 }
 
 window.toggleExpensePaid = toggleExpensePaid;
 window.toggleRecurringExpensePaid = toggleRecurringExpensePaid;
+window.initializeRecurringObligations = initializeRecurringObligations;
 window.deleteExpense = deleteExpense;
 window.deleteRecurringExpense = deleteRecurringExpense;
 
 // 8. Monthly Reporting Engine & Exporting
 async function generateReport() {
     const monthInput = document.getElementById('report-month');
-    if (!monthInput) return;
+    const typeInput = document.getElementById('report-type');
+    const results = document.getElementById('report-results');
+    if (!monthInput || !results) return;
     if (!monthInput.value) monthInput.value = getCurrentMonthYear();
     const month = monthInput.value;
-
-    const { data: salary } = await supabaseClient.from('salaries').select('amount').eq('month_year', month).eq('is_received', true);
-    const { data: expenses } = await supabaseClient.from('expenses').select('amount').eq('month_year', month).eq('is_paid', true);
-    const { data: daily } = await supabaseClient.from('daily_expenses').select('amount').gte('created_at', `${month}-01`);
-    const { data: clients } = await supabaseClient.from('clients').select('total_budget, remaining_budget');
-    const { data: balanceAdjustments } = await supabaseClient.from('balance_adjustments').select('amount').eq('month_year', month).order('created_at', { ascending: false }).limit(1);
-
-    const totalSalary = salary?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
-    const totalExpenses =
-        (expenses?.reduce((sum, i) => sum + Number(i.amount), 0) || 0) +
-        (typeof recurringPaidExpensesTotal === 'function' ? recurringPaidExpensesTotal(month) : 0);
-    const totalDaily = daily?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
-    
-    const totalClients = clients?.reduce((sum, i) => {
-        const total = Number(i.total_budget || 0);
-        const remaining = Number(i.remaining_budget || 0);
-        return sum + (total - remaining);
-    }, 0) || 0;
-
+    const reportType = typeInput?.value || 'comprehensive';
+    const [{ data: salary }, { data: expenses }, { data: daily }, { data: clients }, { data: balanceAdjustments }] = await Promise.all([
+        supabaseClient.from('salaries').select('amount').eq('month_year', month).eq('is_received', true),
+        supabaseClient.from('expenses').select('amount').eq('month_year', month).eq('is_paid', true),
+        supabaseClient.from('daily_expenses').select('amount').gte('created_at', `${month}-01`).lt('created_at', `${month}-32`),
+        supabaseClient.from('clients').select('name,total_budget,remaining_budget'),
+        supabaseClient.from('balance_adjustments').select('amount').eq('month_year', month).order('created_at', { ascending: false }).limit(1)
+    ]);
+    const totalSalary = salary?.reduce((sum, i) => sum + Number(i.amount || 0), 0) || 0;
+    const paidObligations = typeof recurringPaidExpensesTotal === 'function' ? recurringPaidExpensesTotal(month) : 0;
+    const fixedExpenses = expenses?.reduce((sum, i) => sum + Number(i.amount || 0), 0) || 0;
+    const totalExpenses = fixedExpenses + paidObligations;
+    const totalDaily = daily?.reduce((sum, i) => sum + Number(i.amount || 0), 0) || 0;
+    const totalClients = clients?.reduce((sum, i) => sum + Number(i.total_budget || 0) - Number(i.remaining_budget || 0), 0) || 0;
+    const pendingClients = clients?.reduce((sum, i) => sum + Number(i.remaining_budget || 0), 0) || 0;
     const balanceAdjustment = balanceAdjustments?.[0] ? Number(balanceAdjustments[0].amount) : 0;
+    const monthMovements = readMovements().filter(item => String(item.createdAt || '').slice(0, 7) === month);
     const movementSummary = getMovementSummary();
-
-    const netProfit = (totalSalary + totalClients + balanceAdjustment + movementSummary.cashImpact) - (totalExpenses + totalDaily);
-
-    document.getElementById('report-results').innerHTML = `
-        <p><strong>Total Income (Salary + Collected Clients):</strong> ${formatMoney(totalSalary + totalClients)}</p>
-        <p><strong>Balance Adjustment:</strong> ${formatMoney(balanceAdjustment)}</p>
-        <p><strong>Fixed Paid Expenses:</strong> ${formatMoney(totalExpenses)}</p>
-        <p><strong>Total Daily Expenses:</strong> ${formatMoney(totalDaily)}</p>
-        <p><strong>Customer Payments Pending:</strong> ${formatMoney(movementSummary.customerPending)}</p>
-        <p><strong>Held Customer Funds:</strong> ${formatMoney(movementSummary.heldCustomerFunds)}</p>
-        <p><strong>Loans Outstanding:</strong> ${formatMoney(movementSummary.loansOutstanding)}</p>
-        <p><strong>My Obligations:</strong> ${formatMoney(movementSummary.obligations)}</p>
-        <p><strong>Cash Impact from Movements:</strong> ${formatMoney(movementSummary.cashImpact)}</p>
-        <hr style="margin: 10px 0; border-color: var(--border-color);">
-        <p style="font-size: 18px; color: var(--accent);"><strong>Net Available Balance: ${formatMoney(netProfit)}</strong></p>
-    `;
+    const movementRows = monthMovements.map(item => `<tr><td>${escapeHTML(item.title)}</td><td>${escapeHTML(movementTypeLabels[item.type] || item.type)}</td><td>${formatCurrency(item.amount, item.currency)}</td><td>${formatMoney(getMovementBaseAmount(item))}</td></tr>`).join('');
+    const netProfit = totalSalary + totalClients + balanceAdjustment + movementSummary.cashImpact - totalExpenses - totalDaily;
+    const sections = {
+        income: `<p><strong>Confirmed salary:</strong> ${formatMoney(totalSalary)}</p><p><strong>Collected clients:</strong> ${formatMoney(totalClients)}</p><p><strong>Pending client receivables:</strong> ${formatMoney(pendingClients)}</p>`,
+        expenses: `<p><strong>Paid fixed expenses:</strong> ${formatMoney(fixedExpenses)}</p><p><strong>Paid recurring obligations:</strong> ${formatMoney(paidObligations)}</p><p><strong>Daily expenses:</strong> ${formatMoney(totalDaily)}</p><p><strong>Total expenses:</strong> ${formatMoney(totalExpenses + totalDaily)}</p>`,
+        salary: `<p><strong>Confirmed salary for ${escapeHTML(month)}:</strong> ${formatMoney(totalSalary)}</p>`,
+        movements: `<p><strong>Customer payments pending:</strong> ${formatMoney(movementSummary.customerPending)}</p><p><strong>Held customer funds:</strong> ${formatMoney(movementSummary.heldCustomerFunds)}</p><p><strong>Loans outstanding:</strong> ${formatMoney(movementSummary.loansOutstanding)}</p><p><strong>My obligations:</strong> ${formatMoney(movementSummary.obligations)}</p><table class="report-mini-table"><thead><tr><th>Title</th><th>Type</th><th>Original</th><th>EGP</th></tr></thead><tbody>${movementRows || '<tr><td colspan="4">No movements in this month.</td></tr>'}</tbody></table>`,
+        clients: `<p><strong>Collected from clients:</strong> ${formatMoney(totalClients)}</p><p><strong>Still receivable:</strong> ${formatMoney(pendingClients)}</p><p><strong>Clients tracked:</strong> ${clients?.length || 0}</p>`,
+        cashflow: `<p><strong>Cash impact from movements:</strong> ${formatMoney(movementSummary.cashImpact)}</p><p><strong>Balance adjustment:</strong> ${formatMoney(balanceAdjustment)}</p><p><strong>Net available balance:</strong> ${formatMoney(netProfit)}</p>`
+    };
+    const body = reportType === 'comprehensive' ? `${sections.income}${sections.expenses}${sections.movements}${sections.cashflow}` : (sections[reportType] || sections.cashflow);
+    results.innerHTML = `<h3>${escapeHTML(typeInput?.selectedOptions?.[0]?.textContent || 'Financial report')} — ${escapeHTML(month)}</h3>${body}<hr><p class="report-total"><strong>Net available balance:</strong> ${formatMoney(netProfit)}</p>`;
 }
 
 document.getElementById('report-month')?.addEventListener('change', generateReport);
+document.getElementById('report-type')?.addEventListener('change', generateReport);
+document.getElementById('btn-generate-report')?.addEventListener('click', generateReport);
 
 document.getElementById('btn-export-pdf')?.addEventListener('click', () => {
     const reportElement = document.getElementById('report-results');
@@ -884,12 +908,7 @@ function formatCurrency(amount, currency = HOME_CURRENCY) {
 }
 
 function readCachedFxRate() {
-    try {
-        const value = JSON.parse(localStorage.getItem(FX_RATE_STORAGE_KEY) || 'null');
-        return value && Number(value.rate) > 0 ? value : null;
-    } catch (error) {
-        return null;
-    }
+    return null;
 }
 
 async function fetchUsdEgpRate(force = false) {
@@ -912,7 +931,6 @@ async function fetchUsdEgpRate(force = false) {
         lastUpdateUtc: data.time_last_update_utc || new Date().toISOString(),
         nextUpdateUtc: data.time_next_update_utc || ''
     };
-    localStorage.setItem(FX_RATE_STORAGE_KEY, JSON.stringify(result));
     liveUsdEgpRate = rate;
     liveUsdEgpRateMeta = result;
     return result;
@@ -942,10 +960,10 @@ function formatMovementValue(amount, currency = HOME_CURRENCY) {
     return formatCurrency(amount, currency);
 }
 
-// The existing Supabase schema does not include a generic transactions table, so
-// this module stores the new movement records locally and namespaces them per user.
-const MOVEMENT_STORAGE_PREFIX = 'e_wallet_manager_movements_v1';
-let movementUserKey = 'local';
+// Supabase is the source of truth. This in-memory cache is only for rendering and calculations.
+let movementUserKey = null;
+let movementCache = [];
+let movementStorageReady = false;
 
 const movementTypeLabels = {
     customer_paid_unreceived: 'Customer paid — not received',
@@ -966,30 +984,84 @@ const movementStatusLabels = {
 };
 
 async function initializeMovementStorage() {
-    try {
-        const { data: { user } } = await supabaseClient.auth.getUser();
-        movementUserKey = user?.id || 'local';
-    } catch (error) {
-        movementUserKey = 'local';
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    movementUserKey = user?.id || null;
+    if (!movementUserKey) {
+        movementCache = [];
+        movementStorageReady = true;
+        return;
     }
-}
-
-function movementStorageKey() {
-    return `${MOVEMENT_STORAGE_PREFIX}:${movementUserKey}`;
+    const { data, error } = await supabaseClient
+        .from('money_movements')
+        .select('*')
+        .eq('user_id', movementUserKey)
+        .order('created_at', { ascending: false });
+    if (error) throw error;
+    movementCache = (data || []).map(fromSupabaseMovement);
+    movementStorageReady = true;
 }
 
 function readMovements() {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(movementStorageKey()) || '[]');
-        return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-        console.error('Could not read money movements:', error);
-        return [];
-    }
+    return Array.isArray(movementCache) ? movementCache : [];
 }
 
-function writeMovements(movements) {
-    localStorage.setItem(movementStorageKey(), JSON.stringify(movements));
+function movementRow(movement) {
+    return {
+        id: movement.id,
+        user_id: movementUserKey,
+        title: movement.title,
+        kind: movement.type,
+        counterparty: movement.person,
+        amount: movement.amount,
+        currency: movement.currency,
+        fee: movement.transferFee,
+        exchange_rate: movement.exchangeRate,
+        amount_egp: getMovementBaseAmount(movement),
+        settled_amount: movement.settledAmount,
+        due_date: movement.dueDate || null,
+        status: movement.status,
+        notes: movement.notes,
+        occurred_at: movement.createdAt,
+        updated_at: movement.updatedAt
+    };
+}
+
+function fromSupabaseMovement(row) {
+    return normalizeMovement({
+        id: row.id,
+        title: row.title,
+        person: row.counterparty || '',
+        amount: row.amount,
+        settledAmount: row.settled_amount,
+        currency: row.currency,
+        transferFee: row.fee,
+        exchangeRate: row.exchange_rate,
+        dueDate: row.due_date,
+        type: row.kind || row.movement_type,
+        status: row.status,
+        notes: row.notes,
+        createdAt: row.occurred_at || row.created_at,
+        updatedAt: row.updated_at
+    });
+}
+
+async function writeMovement(movement) {
+    if (!movementUserKey) throw new Error('No authenticated user');
+    const { data, error } = await supabaseClient
+        .from('money_movements')
+        .upsert(movementRow(movement), { onConflict: 'id' })
+        .select('*')
+        .single();
+    if (error) throw error;
+    const normalized = fromSupabaseMovement(data);
+    movementCache = [normalized, ...movementCache.filter(item => item.id !== normalized.id)];
+    return normalized;
+}
+
+async function deleteMovementRow(id) {
+    const { error } = await supabaseClient.from('money_movements').delete().eq('id', id);
+    if (error) throw error;
+    movementCache = movementCache.filter(item => item.id !== id);
 }
 
 function normalizeMovement(movement) {
@@ -998,7 +1070,7 @@ function normalizeMovement(movement) {
     const exchangeRate = movement.currency === 'USD' ? Math.max(0, Number(movement.exchangeRate) || 0) : 1;
     const settledAmount = Math.min(amount, Math.max(0, Number(movement.settledAmount) || 0));
     return {
-        id: movement.id || `movement-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: movement.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `00000000-0000-4000-8000-${String(Date.now()).padStart(12, '0')}`),
         title: String(movement.title || '').trim(),
         person: String(movement.person || '').trim(),
         amount,
@@ -1272,62 +1344,46 @@ function updateMovementTypeHelp() {
     help.textContent = messages[type] || '';
 }
 
-function saveMovement(event) {
+async function saveMovement(event) {
     event.preventDefault();
     const amount = Number(document.getElementById('movement-amount').value);
     const currency = document.getElementById('movement-currency').value || HOME_CURRENCY;
     const transferFee = Number(document.getElementById('movement-transfer-fee').value || 0);
     const exchangeRate = Number(document.getElementById('movement-exchange-rate').value || 0);
-    let settledAmount = Number(document.getElementById('movement-settled-amount').value || 0);
-    if (!Number.isFinite(amount) || amount <= 0) {
-        alert('Please enter a valid positive amount.');
-        return;
-    }
-    if (!Number.isFinite(settledAmount) || settledAmount < 0 || settledAmount > amount) {
-        alert('Settled amount must be between zero and the total amount.');
-        return;
-    }
-    if (currency === 'USD' && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
-        alert('A valid USD to EGP exchange rate is required.');
-        return;
-    }
-    if (currency === 'USD' && (!Number.isFinite(transferFee) || transferFee < 0 || transferFee > amount)) {
-        alert('Transfer fee must be between zero and the USD amount.');
-        return;
-    }
+    const settledAmount = Number(document.getElementById('movement-settled-amount').value || 0);
+    if (!Number.isFinite(amount) || amount <= 0) return alert('Please enter a valid positive amount.');
+    if (!Number.isFinite(settledAmount) || settledAmount < 0 || settledAmount > amount) return alert('Settled amount must be between zero and the total amount.');
+    if (currency === 'USD' && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) return alert('A valid USD to EGP exchange rate is required.');
+    if (currency === 'USD' && (!Number.isFinite(transferFee) || transferFee < 0 || transferFee > amount)) return alert('Transfer fee must be between zero and the USD amount.');
 
     const id = document.getElementById('movement-id').value;
     const existing = id ? getMovementById(id) : null;
-    const status = document.getElementById('movement-status').value;
     const movement = normalizeMovement({
         id: id || undefined,
         title: document.getElementById('movement-title').value,
         person: document.getElementById('movement-person').value,
-        amount,
-        settledAmount,
-        currency,
-        transferFee,
+        amount, settledAmount, currency, transferFee,
         exchangeRate: currency === 'USD' ? exchangeRate : 1,
         fxRateUpdatedAt: currency === 'USD' ? (liveUsdEgpRateMeta?.lastUpdateUtc || new Date().toISOString()) : '',
         dueDate: document.getElementById('movement-date').value,
         type: document.getElementById('movement-type').value,
-        status: settledAmount >= amount ? 'settled' : status,
+        status: settledAmount >= amount ? 'settled' : document.getElementById('movement-status').value,
         notes: document.getElementById('movement-notes').value,
         createdAt: existing?.createdAt || new Date().toISOString()
     });
-
-    const movements = readMovements();
-    const nextMovements = existing
-        ? movements.map(item => item.id === movement.id ? movement : item)
-        : [movement, ...movements];
-    writeMovements(nextMovements);
-    closeModal('modal-movement');
-    resetMovementForm();
-    loadMovements();
-    loadDashboardData();
+    try {
+        await writeMovement(movement);
+        closeModal('modal-movement');
+        resetMovementForm();
+        loadMovements();
+        loadDashboardData();
+    } catch (error) {
+        console.error('Could not save movement:', error);
+        alert('Could not save this movement to Supabase.');
+    }
 }
 
-function recordMovementSettlement(id) {
+async function recordMovementSettlement(id) {
     const movement = getMovementById(id);
     if (!movement) return;
     const outstanding = getOutstandingAmount(movement);
@@ -1348,22 +1404,32 @@ function recordMovementSettlement(id) {
         movement.status = movement.settledAmount >= movement.amount ? 'settled' : 'partial';
     }
     movement.updatedAt = new Date().toISOString();
-    writeMovements(readMovements().map(item => item.id === movement.id ? movement : item));
-    loadMovements();
-    loadDashboardData();
+    try {
+        await writeMovement(movement);
+        loadMovements();
+        loadDashboardData();
+    } catch (error) {
+        console.error('Could not settle movement:', error);
+        alert('Could not update this movement in Supabase.');
+    }
 }
 
 function editMovement(id) {
     openMovementForEdit(id);
 }
 
-function deleteMovement(id) {
+async function deleteMovement(id) {
     const movement = getMovementById(id);
     if (!movement) return;
     if (!confirm(`Delete "${movement.title}"?`)) return;
-    writeMovements(readMovements().filter(item => item.id !== id));
-    loadMovements();
-    loadDashboardData();
+    try {
+        await deleteMovementRow(id);
+        loadMovements();
+        loadDashboardData();
+    } catch (error) {
+        console.error('Could not delete movement:', error);
+        alert('Could not delete this movement from Supabase.');
+    }
 }
 
 function exportMovements() {
@@ -1385,25 +1451,22 @@ function importMovements(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
         try {
             const parsed = JSON.parse(reader.result);
             const imported = Array.isArray(parsed) ? parsed : parsed.movements;
             if (!Array.isArray(imported)) throw new Error('Invalid movements file');
-            const valid = imported
-                .map(normalizeMovement)
-                .filter(movement => movement.title && movement.amount > 0);
+            const valid = imported.map(normalizeMovement).filter(movement => movement.title && movement.amount > 0);
             if (!valid.length) throw new Error('No valid movements found');
-            const current = readMovements();
-            const existingIds = new Set(current.map(item => item.id));
-            const deduped = valid.map(item => existingIds.has(item.id)
-                ? { ...item, id: `${item.id}-imported-${Date.now()}` }
-                : item);
-            writeMovements([...deduped, ...current]);
+            for (const movement of valid) {
+                const duplicate = readMovements().some(item => item.id === movement.id);
+                await writeMovement(duplicate ? { ...movement, id: crypto.randomUUID() } : movement);
+            }
             loadMovements();
             loadDashboardData();
-            alert(`${deduped.length} movement(s) imported successfully.`);
+            alert(`${valid.length} movement(s) imported successfully.`);
         } catch (error) {
+            console.error('Could not import movements:', error);
             alert('Could not import this file. Please use a JSON export from this app.');
         } finally {
             event.target.value = '';

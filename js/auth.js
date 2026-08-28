@@ -108,15 +108,16 @@ btnLogout?.addEventListener('click', async () => {
     showAuth();
 });
 
-function showApp() {
+async function showApp() {
     authContainer?.classList.add('hidden');
     appContainer?.classList.remove('hidden');
-    if (typeof initializeMovementStorage === 'function') {
-        initializeMovementStorage().then(() => {
-            if (typeof loadDashboardData === 'function') loadDashboardData();
-        });
-    } else if (typeof loadDashboardData === 'function') {
-        loadDashboardData();
+    try {
+        if (typeof initializeMovementStorage === 'function') await initializeMovementStorage();
+        if (typeof initializeRecurringObligations === 'function') await initializeRecurringObligations();
+        if (typeof loadDashboardData === 'function') await loadDashboardData();
+    } catch (error) {
+        console.error('Could not load Supabase data:', error);
+        alert('Could not load your wallet data. Please refresh and try again.');
     }
 }
 

@@ -7,6 +7,7 @@ const getCurrentMonthYear = () => {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     return `${d.getFullYear()}-${month}`;
 };
+
 // 1. Dashboard & Calculations Engine
 async function loadDashboardData() {
     const currentMonth = getCurrentMonthYear();
@@ -22,13 +23,14 @@ async function loadDashboardData() {
     const salaryIncome =
         salaries?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
-    // Clients Revenue
+    // Clients Received Revenue
     const { data: clients } = await supabaseClient
         .from('clients')
-        .select('total_budget');
+        .select('total_budget, is_collected');
 
     const clientsIncome =
-        clients?.reduce((sum, item) => sum + Number(item.total_budget), 0) || 0;
+        clients?.filter(c => c.is_collected !== false)
+                .reduce((sum, item) => sum + Number(item.total_budget), 0) || 0;
 
     // Paid Fixed Expenses
     const { data: expenses } = await supabaseClient
@@ -69,20 +71,20 @@ async function loadDashboardData() {
         balanceAdjustment;
 
     // Update Dashboard UI Cards
-    document.getElementById('dash-salary').textContent =
-        `$${salaryIncome.toLocaleString()}`;
+    if (document.getElementById('dash-salary'))
+        document.getElementById('dash-salary').textContent = `$${salaryIncome.toLocaleString()}`;
 
-    document.getElementById('dash-clients-income').textContent =
-        `$${clientsIncome.toLocaleString()}`;
+    if (document.getElementById('dash-clients-income'))
+        document.getElementById('dash-clients-income').textContent = `$${clientsIncome.toLocaleString()}`;
 
-    document.getElementById('dash-expenses').textContent =
-        `$${totalFixedExpenses.toLocaleString()}`;
+    if (document.getElementById('dash-expenses'))
+        document.getElementById('dash-expenses').textContent = `$${totalFixedExpenses.toLocaleString()}`;
 
-    document.getElementById('dash-daily-expenses').textContent =
-        `$${totalDailyExpenses.toLocaleString()}`;
+    if (document.getElementById('dash-daily-expenses'))
+        document.getElementById('dash-daily-expenses').textContent = `$${totalDailyExpenses.toLocaleString()}`;
 
-    document.getElementById('dash-available').textContent =
-        `$${availableToSpend.toLocaleString()}`;
+    if (document.getElementById('dash-available'))
+        document.getElementById('dash-available').textContent = `$${availableToSpend.toLocaleString()}`;
 
     // Load Tabular Views
     loadDailyExpenses();
@@ -91,6 +93,7 @@ async function loadDashboardData() {
     loadExpenses();
     loadSalaryForm();
 }
+
 function refreshSectionData(sectionId) {
     if (sectionId === 'sec-dashboard') loadDashboardData();
     if (sectionId === 'sec-clients') loadClients();
@@ -101,65 +104,20 @@ function refreshSectionData(sectionId) {
 }
 
 // 2. Dynamic Available Balance Manual Adjustment
-// تعديل المتاح للصرف يدوياً وتأثيره المزدوج
-
 async function setAvailableBalance(targetAmount) {
     const currentMonth = getCurrentMonthYear();
     const target = Number(targetAmount);
 
     if (isNaN(target)) return;
 
-    // A. Total Income
-    const { data: salaries } = await supabaseClient
-        .from('salaries')
-        .select('amount')
-        .eq('month_year', currentMonth)
-        .eq('is_received', true);
-
-    const salaryIncome =
-        salaries?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
-
-    const { data: clients } = await supabaseClient
-        .from('clients')
-        .select('total_budget');
-
-    const clientsIncome =
-        clients?.reduce((sum, item) => sum + Number(item.total_budget), 0) || 0;
-
-    const totalIncome = salaryIncome + clientsIncome;
-
-    // B. Fixed Expenses
-    const { data: expenses } = await supabaseClient
-        .from('expenses')
-        .select('amount')
-        .eq('month_year', currentMonth)
-        .eq('is_paid', true);
-
-    const totalFixedExpenses =
-        expenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
-
-    // C. Daily Expenses
-    const { data: dailyExpenses } = await supabaseClient
-        .from('daily_expenses')
-        .select('amount')
-        .gte('created_at', `${currentMonth}-01`);
-
-    const currentDailyTotal =
-        dailyExpenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
-
-    // Balance Difference Calculation
-    const currentAvailable =
-        totalIncome - (totalFixedExpenses + currentDailyTotal);
-
-const adjustmentAmount = target;
-
+    const adjustmentAmount = target;
     if (adjustmentAmount === 0) return;
 
-    // Save adjustment separately from daily expenses
     const { error } = await supabaseClient
         .from('balance_adjustments')
         .insert([{
             amount: adjustmentAmount,
+            month_year: currentMonth,
             created_at: new Date().toISOString()
         }]);
 
@@ -170,17 +128,13 @@ const adjustmentAmount = target;
     }
 }
 
-// Event listener for manual balance form
 document.getElementById('form-adjust-available')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-
-    const targetValue =
-        document.getElementById('custom-available-input').value;
-
+    const targetValue = document.getElementById('custom-available-input').value;
     await setAvailableBalance(targetValue);
-
     document.getElementById('custom-available-input').value = '';
 });
+
 // 3. Daily Expenses Operations
 document.getElementById('form-daily-expense')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -233,50 +187,85 @@ async function deleteDailyExpense(id) {
     }
 }
 
-// 4. Clients Module
+// 4. Clients & Receivables Module (المستحقات والديون)
 async function loadClients() {
     const { data: clients, error } = await supabaseClient.from('clients').select('*').order('id', { ascending: false });
     if (error) return console.error(error);
 
     const tbody = document.getElementById('clients-table-body');
     const selectClient = document.getElementById('task-client-id');
-    if (!tbody || !selectClient) return;
+    const pendingIncomeEl = document.getElementById('total-pending-income');
 
-    tbody.innerHTML = '';
-    selectClient.innerHTML = '<option value="">Select Client...</option>';
+    if (tbody) tbody.innerHTML = '';
+    if (selectClient) selectClient.innerHTML = '<option value="">Select Client...</option>';
 
-    clients.forEach(client => {
-        tbody.innerHTML += `
-            <tr>
-                <td>${client.name}</td>
-                <td>$${Number(client.total_budget).toLocaleString()}</td>
-                <td><strong>$${Number(client.remaining_budget).toLocaleString()}</strong></td>
-                <td>
-                    <button class="btn btn-secondary" style="padding: 4px 8px; width: auto;" onclick="deleteClient(${client.id})">Delete</button>
-                </td>
-            </tr>
-        `;
-        selectClient.innerHTML += `<option value="${client.id}">${client.name}</option>`;
+    let pendingTotal = 0;
+
+    clients?.forEach(client => {
+        const isPending = client.is_collected === false;
+        if (isPending) {
+            pendingTotal += Number(client.total_budget || 0);
+        }
+
+        if (tbody) {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${client.name}</td>
+                    <td>$${Number(client.total_budget).toLocaleString()}</td>
+                    <td><strong>$${Number(client.remaining_budget).toLocaleString()}</strong></td>
+                    <td>
+                        <span class="status-badge ${isPending ? 'pending' : 'collected'}">
+                            ${isPending ? 'Pending' : 'Collected'}
+                        </span>
+                    </td>
+                    <td>
+                        ${isPending ? `<button class="btn btn-primary btn-sm" onclick="collectClientIncome(${client.id})">Collect Income</button>` : '<span style="color: var(--text-secondary); font-size: 12px;">Collected</span>'}
+                        <button class="btn btn-secondary btn-sm" style="width: auto;" onclick="deleteClient(${client.id})">Delete</button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        if (selectClient) {
+            selectClient.innerHTML += `<option value="${client.id}">${client.name}</option>`;
+        }
     });
+
+    if (pendingIncomeEl) {
+        pendingIncomeEl.textContent = `$${pendingTotal.toLocaleString()}`;
+    }
 }
 
 document.getElementById('form-client')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('client-name').value;
     const budget = Number(document.getElementById('client-budget').value);
+    const isCollected = document.getElementById('client-is-collected')?.checked ?? true;
 
     const { error } = await supabaseClient.from('clients').insert([{
         name: name,
         total_budget: budget,
-        remaining_budget: budget
+        remaining_budget: budget,
+        is_collected: isCollected
     }]);
 
     if (!error) {
         document.getElementById('form-client').reset();
-        closeModal('modal-client');
+        if (typeof closeModal === 'function') closeModal('modal-client');
         loadDashboardData();
     }
 });
+
+async function collectClientIncome(clientId) {
+    const { error } = await supabaseClient
+        .from('clients')
+        .update({ is_collected: true })
+        .eq('id', clientId);
+
+    if (!error) {
+        loadDashboardData();
+    }
+}
 
 async function deleteClient(id) {
     if (confirm('Are you sure you want to delete this client and all associated tasks?')) {
@@ -298,7 +287,7 @@ async function loadTasks() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    tasks.forEach(task => {
+    tasks?.forEach(task => {
         const isCompleted = task.status === 'completed';
         tbody.innerHTML += `
             <tr>
@@ -330,7 +319,7 @@ document.getElementById('form-task')?.addEventListener('submit', async (e) => {
 
     if (!error) {
         document.getElementById('form-task').reset();
-        closeModal('modal-task');
+        if (typeof closeModal === 'function') closeModal('modal-task');
         loadTasks();
     }
 });
@@ -362,11 +351,12 @@ async function loadSalaryForm() {
 
     monthInput.value = currentMonth;
 
-const { data: salary } = await supabaseClient
-  .from('salaries')
-  .select('*')
-  .eq('month_year', currentMonth)
-  .maybeSingle();
+    const { data: salary } = await supabaseClient
+        .from('salaries')
+        .select('*')
+        .eq('month_year', currentMonth)
+        .maybeSingle();
+
     if (salary) {
         document.getElementById('salary-amount').value = salary.amount;
         document.getElementById('salary-received').checked = salary.is_received;
@@ -382,11 +372,12 @@ document.getElementById('salary-form')?.addEventListener('submit', async (e) => 
     const amount = Number(document.getElementById('salary-amount').value);
     const isReceived = document.getElementById('salary-received').checked;
 
-const { data: existing } = await supabaseClient
-  .from('salaries')
-  .select('id')
-  .eq('month_year', monthYear)
-  .maybeSingle();
+    const { data: existing } = await supabaseClient
+        .from('salaries')
+        .select('id')
+        .eq('month_year', monthYear)
+        .maybeSingle();
+
     if (existing) {
         await supabaseClient.from('salaries').update({ amount, is_received: isReceived }).eq('id', existing.id);
     } else {
@@ -440,7 +431,7 @@ document.getElementById('form-expense')?.addEventListener('submit', async (e) =>
     }]);
 
     document.getElementById('form-expense').reset();
-    closeModal('modal-expense');
+    if (typeof closeModal === 'function') closeModal('modal-expense');
     loadDashboardData();
 });
 
@@ -491,12 +482,12 @@ async function generateReport() {
     const { data: salary } = await supabaseClient.from('salaries').select('amount').eq('month_year', month).eq('is_received', true);
     const { data: expenses } = await supabaseClient.from('expenses').select('amount').eq('month_year', month).eq('is_paid', true);
     const { data: daily } = await supabaseClient.from('daily_expenses').select('amount').gte('created_at', `${month}-01`);
-    const { data: clients } = await supabaseClient.from('clients').select('total_budget');
+    const { data: clients } = await supabaseClient.from('clients').select('total_budget, is_collected');
 
     const totalSalary = salary?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
     const totalExpenses = expenses?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
     const totalDaily = daily?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
-    const totalClients = clients?.reduce((sum, i) => sum + Number(i.total_budget), 0) || 0;
+    const totalClients = clients?.filter(c => c.is_collected !== false).reduce((sum, i) => sum + Number(i.total_budget), 0) || 0;
 
     const netProfit = (totalSalary + totalClients) - (totalExpenses + totalDaily);
 
@@ -531,5 +522,12 @@ document.getElementById('btn-export-pdf')?.addEventListener('click', () => {
     html2pdf().set(opt).from(reportElement).save();
 });
 
-// Make function global
+// Make functions global
 window.setAvailableBalance = setAvailableBalance;
+window.collectClientIncome = collectClientIncome;
+window.deleteDailyExpense = deleteDailyExpense;
+window.deleteClient = deleteClient;
+window.deleteTask = deleteTask;
+window.deleteExpense = deleteExpense;
+window.completeTask = completeTask;
+window.toggleExpensePaid = toggleExpensePaid;

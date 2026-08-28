@@ -107,20 +107,19 @@ async function setAvailableBalance(targetAmount) {
     const currentAvailable = totalIncome - (totalFixedExpenses + currentDailyTotal);
     const adjustmentAmount = currentAvailable - target;
 
-    if (adjustmentAmount === 0) return;
+   if (adjustmentAmount === 0) return;
 
-    // Insert Adjustment Entry to Keep Both Stats Synced
-    const { error } = await supabaseClient.from('daily_expenses').insert([{
-        title: 'Manual Balance Adjustment',
+const { error } = await supabaseClient
+    .from('balance_adjustments')
+    .insert([{
         amount: adjustmentAmount,
         created_at: new Date().toISOString()
     }]);
 
-    if (!error) {
-        loadDashboardData();
-    } else {
-        console.error('Error adjusting balance:', error);
-    }
+if (!error) {
+    loadDashboardData();
+} else {
+    console.error('Error adjusting balance:', error);
 }
 
 // Event listener for manual balance form

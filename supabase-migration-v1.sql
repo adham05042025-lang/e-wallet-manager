@@ -9,7 +9,12 @@ alter table public.clients
   add column if not exists collected_amount numeric not null default 0,
   add column if not exists delivery_status text not null default 'not_started',
   add column if not exists delivered_amount numeric not null default 0,
-  add column if not exists work_status text not null default 'not_started';
+  add column if not exists work_status text not null default 'not_started',
+  add column if not exists currency text not null default 'EGP',
+  add column if not exists transfer_fee numeric not null default 0,
+  add column if not exists exchange_rate numeric not null default 1,
+  add column if not exists total_budget_egp numeric,
+  add column if not exists remaining_budget_egp numeric;
 
 alter table public.daily_expenses
   add column if not exists user_id uuid references auth.users(id),

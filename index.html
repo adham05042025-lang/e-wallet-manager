@@ -77,14 +77,17 @@
 
     <!-- Main App Layout -->
     <div id="app-container" class="app-layout hidden">
-        
+        <div class="mobile-app-bar">
+            <span class="mobile-app-title">💳 E-Wallet</span>
+            <button type="button" id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="app-sidebar">
+                <i class="fa-solid fa-bars" aria-hidden="true"></i>
+                <span class="sr-only">Menu</span>
+            </button>
+        </div>
         <!-- Sidebar Navigation -->
-        <aside id="app-sidebar" class="sidebar">
+        <aside id="app-sidebar" class="sidebar" aria-label="Primary navigation">
             <div class="brand">
                 <span>💳 E-Wallet</span>
-                <button type="button" id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Open navigation menu" aria-expanded="false">
-                    <i class="fa-solid fa-bars"></i>
-                </button>
             </div>
             <nav class="nav-menu">
                 <button class="nav-item active" data-target="sec-dashboard">📊 Dashboard</button>
@@ -468,8 +471,32 @@
                 <div class="form-group">
                     <input type="text" id="client-name" placeholder="Client Name" required>
                 </div>
-                <div class="form-group">
-                    <input type="number" step="0.01" id="client-budget" placeholder="Total Budget (ج.م)" required>
+                <div class="form-row client-finance-row">
+                    <div class="form-group">
+                        <label for="client-budget">Total Budget</label>
+                        <input type="number" step="0.01" min="0.01" id="client-budget" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-currency">Currency</label>
+                        <select id="client-currency">
+                            <option value="EGP">جنيه مصري (EGP)</option>
+                            <option value="USD">دولار أمريكي (USD)</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="client-fx-fields" class="fx-fields hidden">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="client-transfer-fee">Transfer fee (USD)</label>
+                            <input type="number" step="0.01" min="0" id="client-transfer-fee" placeholder="0.00" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="client-exchange-rate">USD → EGP rate</label>
+                            <input type="number" step="0.0001" min="0" id="client-exchange-rate" placeholder="Fetching live rate…" readonly>
+                        </div>
+                    </div>
+                    <div id="client-fx-preview" class="fx-preview">Choose USD to fetch the current rate.</div>
+                    <small id="client-rate-meta" class="field-help"></small>
                 </div>
                 <div class="form-group" style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
                     <input type="checkbox" id="client-is-collected" style="width: auto;" checked>

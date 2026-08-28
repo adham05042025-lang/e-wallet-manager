@@ -68,7 +68,9 @@ function refreshSectionData(sectionId) {
     if (sectionId === 'sec-reports') generateReport();
 }
 
-// 2. Dynamic Available Balance Manual Adjustment (تعديل المتاح للصرف يدوياً وتأثيره المزدوج)
+// 2. Dynamic Available Balance Manual Adjustment
+// تعديل المتاح للصرف يدوياً وتأثيره المزدوج
+
 async function setAvailableBalance(targetAmount) {
     const currentMonth = getCurrentMonthYear();
     const target = Number(targetAmount);
@@ -81,10 +83,16 @@ async function setAvailableBalance(targetAmount) {
         .select('amount')
         .eq('month_year', currentMonth)
         .eq('is_received', true);
-    const salaryIncome = salaries?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
-    const { data: clients } = await supabaseClient.from('clients').select('total_budget');
-    const clientsIncome = clients?.reduce((sum, item) => sum + Number(item.total_budget), 0) || 0;
+    const salaryIncome =
+        salaries?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+    const { data: clients } = await supabaseClient
+        .from('clients')
+        .select('total_budget');
+
+    const clientsIncome =
+        clients?.reduce((sum, item) => sum + Number(item.total_budget), 0) || 0;
 
     const totalIncome = salaryIncome + clientsIncome;
 
@@ -94,42 +102,53 @@ async function setAvailableBalance(targetAmount) {
         .select('amount')
         .eq('month_year', currentMonth)
         .eq('is_paid', true);
-    const totalFixedExpenses = expenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+    const totalFixedExpenses =
+        expenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
     // C. Daily Expenses
     const { data: dailyExpenses } = await supabaseClient
         .from('daily_expenses')
         .select('amount')
         .gte('created_at', `${currentMonth}-01`);
-    const currentDailyTotal = dailyExpenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+    const currentDailyTotal =
+        dailyExpenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
     // Balance Difference Calculation
-    const currentAvailable = totalIncome - (totalFixedExpenses + currentDailyTotal);
+    const currentAvailable =
+        totalIncome - (totalFixedExpenses + currentDailyTotal);
+
     const adjustmentAmount = currentAvailable - target;
 
-   if (adjustmentAmount === 0) return;
+    if (adjustmentAmount === 0) return;
 
-const { error } = await supabaseClient
-    .from('balance_adjustments')
-    .insert([{
-        amount: adjustmentAmount,
-        created_at: new Date().toISOString()
-    }]);
+    // Save adjustment separately from daily expenses
+    const { error } = await supabaseClient
+        .from('balance_adjustments')
+        .insert([{
+            amount: adjustmentAmount,
+            created_at: new Date().toISOString()
+        }]);
 
-if (!error) {
-    loadDashboardData();
-} else {
-    console.error('Error adjusting balance:', error);
+    if (!error) {
+        loadDashboardData();
+    } else {
+        console.error('Error adjusting balance:', error);
+    }
 }
 
 // Event listener for manual balance form
 document.getElementById('form-adjust-available')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const targetValue = document.getElementById('custom-available-input').value;
+
+    const targetValue =
+        document.getElementById('custom-available-input').value;
+
     await setAvailableBalance(targetValue);
+
     document.getElementById('custom-available-input').value = '';
 });
-
 // 3. Daily Expenses Operations
 document.getElementById('form-daily-expense')?.addEventListener('submit', async (e) => {
     e.preventDefault();

@@ -81,30 +81,30 @@ async function loadDashboardData() {
 
     // Update Dashboard UI Cards
     if (document.getElementById('dash-salary'))
-        document.getElementById('dash-salary').textContent = `$${salaryIncome.toLocaleString()}`;
+        document.getElementById('dash-salary').textContent = formatMoney(salaryIncome);
 
     if (document.getElementById('dash-clients-income'))
-        document.getElementById('dash-clients-income').textContent = `$${clientsIncome.toLocaleString()}`;
+        document.getElementById('dash-clients-income').textContent = formatMoney(clientsIncome);
     if (document.getElementById('dash-pending-income'))
-        document.getElementById('dash-pending-income').textContent = `$${clientPendingIncome.toLocaleString()}`;
+        document.getElementById('dash-pending-income').textContent = formatMoney(clientPendingIncome);
 
     if (document.getElementById('dash-expenses'))
-        document.getElementById('dash-expenses').textContent = `$${totalFixedExpenses.toLocaleString()}`;
+        document.getElementById('dash-expenses').textContent = formatMoney(totalFixedExpenses);
 
     if (document.getElementById('dash-daily-expenses'))
-        document.getElementById('dash-daily-expenses').textContent = `$${totalDailyExpenses.toLocaleString()}`;
+        document.getElementById('dash-daily-expenses').textContent = formatMoney(totalDailyExpenses);
 
     if (document.getElementById('dash-available'))
-        document.getElementById('dash-available').textContent = `$${availableToSpend.toLocaleString()}`;
+        document.getElementById('dash-available').textContent = formatMoney(availableToSpend);
 
     if (document.getElementById('dash-customer-payments-pending'))
-        document.getElementById('dash-customer-payments-pending').textContent = `$${(clientPendingIncome + movementSummary.customerPending).toLocaleString()}`;
+        document.getElementById('dash-customer-payments-pending').textContent = formatMoney(clientPendingIncome + movementSummary.customerPending);
     if (document.getElementById('dash-held-funds'))
-        document.getElementById('dash-held-funds').textContent = `$${movementSummary.heldCustomerFunds.toLocaleString()}`;
+        document.getElementById('dash-held-funds').textContent = formatMoney(movementSummary.heldCustomerFunds);
     if (document.getElementById('dash-loans-outstanding'))
-        document.getElementById('dash-loans-outstanding').textContent = `$${movementSummary.loansOutstanding.toLocaleString()}`;
+        document.getElementById('dash-loans-outstanding').textContent = formatMoney(movementSummary.loansOutstanding);
     if (document.getElementById('dash-obligations'))
-        document.getElementById('dash-obligations').textContent = `$${movementSummary.obligations.toLocaleString()}`;
+        document.getElementById('dash-obligations').textContent = formatMoney(movementSummary.obligations);
 
     // Load Tabular Views
     loadDailyExpenses();
@@ -189,7 +189,7 @@ async function loadDailyExpenses() {
         tbody.innerHTML += `
             <tr>
                 <td>${item.title}</td>
-                <td style="color: var(--danger); font-weight: bold;">$${Number(item.amount).toLocaleString()}</td>
+                <td style="color: var(--danger); font-weight: bold;">${formatMoney(item.amount)}</td>
                 <td>${time}</td>
                 <td>
                     <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px; width: auto;" onclick="deleteDailyExpense(${item.id})">Delete</button>
@@ -232,8 +232,8 @@ async function loadClients() {
             tbody.innerHTML += `
                 <tr>
                     <td>${client.name}</td>
-                    <td>$${Number(client.total_budget).toLocaleString()}</td>
-                    <td><strong>$${remaining.toLocaleString()}</strong></td>
+                    <td>${formatMoney(client.total_budget)}</td>
+                    <td><strong>${formatMoney(remaining)}</strong></td>
                     <td>
                         <span class="status-badge ${isPending ? 'pending' : 'collected'}">
                             ${isPending ? 'Pending' : 'Collected'}
@@ -253,7 +253,7 @@ async function loadClients() {
     });
 
     if (pendingIncomeEl) {
-        pendingIncomeEl.textContent = `$${pendingTotal.toLocaleString()}`;
+        pendingIncomeEl.textContent = formatMoney(pendingTotal);
     }
 }
 
@@ -281,7 +281,7 @@ document.getElementById('form-client')?.addEventListener('submit', async (e) => 
 
 // إمكانية تحصيل جزء من المبلغ أو تحصيله بالكامل
 async function collectClientIncome(clientId, currentRemaining) {
-    const input = prompt(`Enter amount to collect (Remaining: $${currentRemaining}):`, currentRemaining);
+    const input = prompt(`Enter amount to collect (Remaining: ${formatMoney(currentRemaining)}):`, currentRemaining);
     if (input === null) return; // Cancelled
 
     const collectAmount = Number(input);
@@ -339,7 +339,7 @@ async function loadTasks() {
             <tr>
                 <td>${task.title}</td>
                 <td>${task.clients?.name || 'N/A'}</td>
-                <td>$${Number(task.cost).toLocaleString()}</td>
+                <td>${formatMoney(task.cost)}</td>
                 <td><span style="color: ${isCompleted ? 'var(--accent)' : 'orange'}">${isCompleted ? 'Completed' : 'Pending'}</span></td>
                 <td>
                     ${!isCompleted ? `<button class="btn btn-primary" style="padding: 4px 8px; font-size: 12px; width: auto;" onclick="completeTask(${task.id}, ${task.client_id}, ${task.cost})">Complete & Deduct</button>` : ''}
@@ -821,17 +821,17 @@ async function generateReport() {
     const netProfit = (totalSalary + totalClients + balanceAdjustment + movementSummary.cashImpact) - (totalExpenses + totalDaily);
 
     document.getElementById('report-results').innerHTML = `
-        <p><strong>Total Income (Salary + Collected Clients):</strong> $${(totalSalary + totalClients).toLocaleString()}</p>
-        <p><strong>Balance Adjustment:</strong> $${balanceAdjustment.toLocaleString()}</p>
-        <p><strong>Fixed Paid Expenses:</strong> $${totalExpenses.toLocaleString()}</p>
-        <p><strong>Total Daily Expenses:</strong> $${totalDaily.toLocaleString()}</p>
-        <p><strong>Customer Payments Pending:</strong> ${movementSummary.customerPending.toLocaleString()}</p>
-        <p><strong>Held Customer Funds:</strong> ${movementSummary.heldCustomerFunds.toLocaleString()}</p>
-        <p><strong>Loans Outstanding:</strong> ${movementSummary.loansOutstanding.toLocaleString()}</p>
-        <p><strong>My Obligations:</strong> ${movementSummary.obligations.toLocaleString()}</p>
-        <p><strong>Cash Impact from Movements:</strong> ${movementSummary.cashImpact.toLocaleString()}</p>
+        <p><strong>Total Income (Salary + Collected Clients):</strong> ${formatMoney(totalSalary + totalClients)}</p>
+        <p><strong>Balance Adjustment:</strong> ${formatMoney(balanceAdjustment)}</p>
+        <p><strong>Fixed Paid Expenses:</strong> ${formatMoney(totalExpenses)}</p>
+        <p><strong>Total Daily Expenses:</strong> ${formatMoney(totalDaily)}</p>
+        <p><strong>Customer Payments Pending:</strong> ${formatMoney(movementSummary.customerPending)}</p>
+        <p><strong>Held Customer Funds:</strong> ${formatMoney(movementSummary.heldCustomerFunds)}</p>
+        <p><strong>Loans Outstanding:</strong> ${formatMoney(movementSummary.loansOutstanding)}</p>
+        <p><strong>My Obligations:</strong> ${formatMoney(movementSummary.obligations)}</p>
+        <p><strong>Cash Impact from Movements:</strong> ${formatMoney(movementSummary.cashImpact)}</p>
         <hr style="margin: 10px 0; border-color: var(--border-color);">
-        <p style="font-size: 18px; color: var(--accent);"><strong>Net Available Balance: $${netProfit.toLocaleString()}</strong></p>
+        <p style="font-size: 18px; color: var(--accent);"><strong>Net Available Balance: ${formatMoney(netProfit)}</strong></p>
     `;
 }
 
@@ -869,6 +869,79 @@ window.toggleExpensePaid = toggleExpensePaid;
 
 
 // 9. Money Movements Module
+const HOME_CURRENCY = 'EGP';
+const FX_RATE_STORAGE_KEY = 'e_wallet_manager_usd_egp_rate_v1';
+let liveUsdEgpRate = null;
+let liveUsdEgpRateMeta = null;
+
+function formatMoney(amount) {
+    return `ج.م ${Number(amount || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 })}`;
+}
+
+function formatCurrency(amount, currency = HOME_CURRENCY) {
+    if (currency === 'USD') return `$${Number(amount || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+    return formatMoney(amount);
+}
+
+function readCachedFxRate() {
+    try {
+        const value = JSON.parse(localStorage.getItem(FX_RATE_STORAGE_KEY) || 'null');
+        return value && Number(value.rate) > 0 ? value : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+async function fetchUsdEgpRate(force = false) {
+    const cached = readCachedFxRate();
+    const today = new Date().toISOString().slice(0, 10);
+    if (!force && cached?.rate && cached?.date === today) {
+        liveUsdEgpRate = Number(cached.rate);
+        liveUsdEgpRateMeta = cached;
+        return cached;
+    }
+
+    const response = await fetch('https://open.er-api.com/v6/latest/USD', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`FX request failed (${response.status})`);
+    const data = await response.json();
+    const rate = Number(data?.rates?.EGP);
+    if (!Number.isFinite(rate) || rate <= 0) throw new Error('USD to EGP rate is unavailable');
+    const result = {
+        rate,
+        date: today,
+        lastUpdateUtc: data.time_last_update_utc || new Date().toISOString(),
+        nextUpdateUtc: data.time_next_update_utc || ''
+    };
+    localStorage.setItem(FX_RATE_STORAGE_KEY, JSON.stringify(result));
+    liveUsdEgpRate = rate;
+    liveUsdEgpRateMeta = result;
+    return result;
+}
+
+function getMovementNetForeignAmount(movement) {
+    return Math.max(0, Number(movement.amount || 0) - Number(movement.transferFee || 0));
+}
+
+function getMovementBaseAmount(movement) {
+    const foreignNet = getMovementNetForeignAmount(movement);
+    if (movement.currency !== 'USD') return Number(movement.amount || 0);
+    return foreignNet * Number(movement.exchangeRate || 0);
+}
+
+function getMovementSettledBaseAmount(movement) {
+    const settledForeign = Math.min(
+        getMovementNetForeignAmount(movement),
+        Math.max(0, Number(movement.settledAmount || 0))
+    );
+    return movement.currency === 'USD'
+        ? settledForeign * Number(movement.exchangeRate || 0)
+        : settledForeign;
+}
+
+function formatMovementValue(amount, currency = HOME_CURRENCY) {
+    return formatCurrency(amount, currency);
+}
+
 // The existing Supabase schema does not include a generic transactions table, so
 // this module stores the new movement records locally and namespaces them per user.
 const MOVEMENT_STORAGE_PREFIX = 'e_wallet_manager_movements_v1';
@@ -921,6 +994,8 @@ function writeMovements(movements) {
 
 function normalizeMovement(movement) {
     const amount = Math.max(0, Number(movement.amount) || 0);
+    const transferFee = Math.min(amount, Math.max(0, Number(movement.transferFee) || 0));
+    const exchangeRate = movement.currency === 'USD' ? Math.max(0, Number(movement.exchangeRate) || 0) : 1;
     const settledAmount = Math.min(amount, Math.max(0, Number(movement.settledAmount) || 0));
     return {
         id: movement.id || `movement-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -928,6 +1003,10 @@ function normalizeMovement(movement) {
         person: String(movement.person || '').trim(),
         amount,
         settledAmount,
+        currency: movement.currency === 'USD' ? 'USD' : HOME_CURRENCY,
+        transferFee,
+        exchangeRate,
+        fxRateUpdatedAt: movement.fxRateUpdatedAt || '',
         dueDate: movement.dueDate || '',
         type: movement.type || 'receivable',
         status: movement.status || 'pending',
@@ -954,8 +1033,8 @@ function getEffectiveMovementStatus(movement) {
 }
 
 function getMovementCashImpact(movement) {
-    const amount = Number(movement.amount || 0);
-    const settled = Math.min(amount, Math.max(0, Number(movement.settledAmount || 0)));
+    const amount = getMovementBaseAmount(movement);
+    const settled = getMovementSettledBaseAmount(movement);
     const status = getEffectiveMovementStatus(movement);
 
     switch (movement.type) {
@@ -1006,10 +1085,6 @@ function getMovementSummary() {
     return summary;
 }
 
-function formatMoney(amount) {
-    return `$${Number(amount || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-}
-
 function escapeHTML(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({
         '&': '&amp;',
@@ -1018,6 +1093,60 @@ function escapeHTML(value) {
         '"': '&quot;',
         "'": '&#039;'
     }[character]));
+}
+
+function movementAmountMarkup(movement, includeSettlement = true) {
+    const currency = movement.currency === 'USD' ? 'USD' : HOME_CURRENCY;
+    const gross = formatCurrency(movement.amount, currency);
+    const base = formatMoney(getMovementBaseAmount(movement));
+    const fee = movement.currency === 'USD' && Number(movement.transferFee || 0) > 0
+        ? `<small class="movement-description fx-fee">Fee: ${formatCurrency(movement.transferFee, 'USD')}</small>`
+        : '';
+    const rate = movement.currency === 'USD'
+        ? `<small class="movement-description fx-rate">Rate: 1 USD = ${formatMoney(movement.exchangeRate)}${movement.fxRateUpdatedAt ? ` · ${escapeHTML(new Date(movement.fxRateUpdatedAt).toLocaleDateString())}` : ''}</small>`
+        : '';
+    const settlement = includeSettlement && Number(movement.settledAmount || 0) > 0
+        ? `<small class="settlement-note">Settled: ${formatCurrency(movement.settledAmount, currency)}</small>`
+        : '';
+    return `<strong>${gross}</strong><small class="movement-description">Net in EGP: ${base}</small>${fee}${rate}${settlement}`;
+}
+
+function updateMovementCurrencyUI() {
+    const currency = document.getElementById('movement-currency')?.value || HOME_CURRENCY;
+    const fxFields = document.getElementById('movement-fx-fields');
+    const rateInput = document.getElementById('movement-exchange-rate');
+    const feeInput = document.getElementById('movement-transfer-fee');
+    const preview = document.getElementById('movement-fx-preview');
+    const meta = document.getElementById('movement-rate-meta');
+    const amount = Number(document.getElementById('movement-amount')?.value || 0);
+    const fee = Number(feeInput?.value || 0);
+    fxFields?.classList.toggle('hidden', currency !== 'USD');
+    if (currency !== 'USD') return;
+    if (rateInput?.value) {
+        const rate = Number(rateInput.value);
+        const netUsd = Math.max(0, amount - fee);
+        if (preview) preview.textContent = `${formatCurrency(netUsd, 'USD')} net × ${formatMoney(rate)} = ${formatMoney(netUsd * rate)}`;
+    }
+    if (meta && liveUsdEgpRateMeta) meta.textContent = `Rate updated: ${liveUsdEgpRateMeta.lastUpdateUtc || 'just now'}`;
+}
+
+async function prepareUsdRate(force = false) {
+    const rateInput = document.getElementById('movement-exchange-rate');
+    const meta = document.getElementById('movement-rate-meta');
+    if (!rateInput) return;
+    rateInput.placeholder = 'Fetching live rate…';
+    try {
+        const result = await fetchUsdEgpRate(force);
+        rateInput.value = Number(result.rate).toFixed(4);
+        rateInput.readOnly = true;
+        if (meta) meta.textContent = `Rate updated: ${result.lastUpdateUtc || 'just now'}`;
+        updateMovementCurrencyUI();
+    } catch (error) {
+        rateInput.readOnly = false;
+        rateInput.value = '';
+        if (meta) meta.textContent = 'Could not fetch the rate. You may enter it manually.';
+        alert('The live USD/EGP rate could not be loaded. Check your connection or enter the rate manually.');
+    }
 }
 
 function loadMovements() {
@@ -1057,9 +1186,7 @@ function loadMovements() {
     filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(movement => {
         const effectiveStatus = getEffectiveMovementStatus(movement);
         const outstanding = getOutstandingAmount(movement);
-        const settlementText = Number(movement.settledAmount || 0) > 0 && effectiveStatus !== 'settled'
-            ? `<small class="settlement-note">${formatMoney(movement.settledAmount)} settled</small>`
-            : '';
+        const settlementText = '';
         const dueText = movement.dueDate
             ? `<span class="${effectiveStatus === 'overdue' ? 'due-overdue' : ''}">${escapeHTML(movement.dueDate)}</span>`
             : '<span class="muted">—</span>';
@@ -1072,7 +1199,7 @@ function loadMovements() {
                     ${movement.person ? `<small class="movement-description">${escapeHTML(movement.title)}</small>` : ''}
                     ${movement.notes ? `<small class="movement-description">${escapeHTML(movement.notes)}</small>` : ''}
                 </td>
-                <td><strong>${formatMoney(movement.amount)}</strong>${settlementText}${outstanding > 0 && effectiveStatus !== 'settled' ? `<small class="settlement-note">${formatMoney(outstanding)} remaining</small>` : ''}</td>
+                <td>${movementAmountMarkup(movement)}${outstanding > 0 && effectiveStatus !== 'settled' ? `<small class="settlement-note">Remaining: ${formatMoney(getMovementBaseAmount(movement) - getMovementSettledBaseAmount(movement))}</small>` : ''}</td>
                 <td><span class="status-badge movement-status-${escapeHTML(effectiveStatus)}">${escapeHTML(movementStatusLabels[effectiveStatus] || effectiveStatus)}</span></td>
                 <td>${dueText}</td>
                 <td class="movement-actions">
@@ -1094,7 +1221,18 @@ function resetMovementForm() {
     if (title) title.textContent = 'Add Money Movement';
     const settledAmount = document.getElementById('movement-settled-amount');
     if (settledAmount) settledAmount.value = '0';
+    const currency = document.getElementById('movement-currency');
+    if (currency) currency.value = HOME_CURRENCY;
+    const transferFee = document.getElementById('movement-transfer-fee');
+    if (transferFee) transferFee.value = '0';
+    const rateInput = document.getElementById('movement-exchange-rate');
+    if (rateInput) { rateInput.value = ''; rateInput.readOnly = true; }
+    const fxMeta = document.getElementById('movement-rate-meta');
+    if (fxMeta) fxMeta.textContent = '';
+    const fxPreview = document.getElementById('movement-fx-preview');
+    if (fxPreview) fxPreview.textContent = 'Choose USD to fetch the current rate.';
     updateMovementTypeHelp();
+    updateMovementCurrencyUI();
 }
 
 function openMovementForEdit(id) {
@@ -1105,12 +1243,16 @@ function openMovementForEdit(id) {
     document.getElementById('movement-person').value = movement.person;
     document.getElementById('movement-amount').value = movement.amount;
     document.getElementById('movement-settled-amount').value = movement.settledAmount || 0;
+    document.getElementById('movement-currency').value = movement.currency || HOME_CURRENCY;
+    document.getElementById('movement-transfer-fee').value = movement.transferFee || 0;
+    document.getElementById('movement-exchange-rate').value = movement.currency === 'USD' ? (movement.exchangeRate || '') : '';
     document.getElementById('movement-date').value = movement.dueDate || '';
     document.getElementById('movement-type').value = movement.type;
     document.getElementById('movement-status').value = movement.status;
     document.getElementById('movement-notes').value = movement.notes || '';
     document.getElementById('modal-movement-title').textContent = 'Edit Money Movement';
     updateMovementTypeHelp();
+    updateMovementCurrencyUI();
     document.getElementById('modal-movement').classList.remove('hidden');
 }
 
@@ -1133,6 +1275,9 @@ function updateMovementTypeHelp() {
 function saveMovement(event) {
     event.preventDefault();
     const amount = Number(document.getElementById('movement-amount').value);
+    const currency = document.getElementById('movement-currency').value || HOME_CURRENCY;
+    const transferFee = Number(document.getElementById('movement-transfer-fee').value || 0);
+    const exchangeRate = Number(document.getElementById('movement-exchange-rate').value || 0);
     let settledAmount = Number(document.getElementById('movement-settled-amount').value || 0);
     if (!Number.isFinite(amount) || amount <= 0) {
         alert('Please enter a valid positive amount.');
@@ -1140,6 +1285,14 @@ function saveMovement(event) {
     }
     if (!Number.isFinite(settledAmount) || settledAmount < 0 || settledAmount > amount) {
         alert('Settled amount must be between zero and the total amount.');
+        return;
+    }
+    if (currency === 'USD' && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) {
+        alert('A valid USD to EGP exchange rate is required.');
+        return;
+    }
+    if (currency === 'USD' && (!Number.isFinite(transferFee) || transferFee < 0 || transferFee > amount)) {
+        alert('Transfer fee must be between zero and the USD amount.');
         return;
     }
 
@@ -1152,6 +1305,10 @@ function saveMovement(event) {
         person: document.getElementById('movement-person').value,
         amount,
         settledAmount,
+        currency,
+        transferFee,
+        exchangeRate: currency === 'USD' ? exchangeRate : 1,
+        fxRateUpdatedAt: currency === 'USD' ? (liveUsdEgpRateMeta?.lastUpdateUtc || new Date().toISOString()) : '',
         dueDate: document.getElementById('movement-date').value,
         type: document.getElementById('movement-type').value,
         status: settledAmount >= amount ? 'settled' : status,
@@ -1179,7 +1336,8 @@ function recordMovementSettlement(id) {
         movement.status = 'settled';
         movement.settledAmount = movement.amount;
     } else {
-        const input = prompt(`Amount to settle (remaining: ${formatMoney(outstanding)}):`, outstanding);
+        const remainingLabel = movement.currency === 'USD' ? formatCurrency(outstanding, 'USD') : formatMoney(outstanding);
+        const input = prompt(`Amount to settle (remaining: ${remainingLabel}):`, outstanding);
         if (input === null) return;
         const settlement = Number(input);
         if (!Number.isFinite(settlement) || settlement <= 0 || settlement > outstanding) {
@@ -1256,6 +1414,12 @@ function importMovements(event) {
 
 document.getElementById('form-movement')?.addEventListener('submit', saveMovement);
 document.getElementById('movement-type')?.addEventListener('change', updateMovementTypeHelp);
+document.getElementById('movement-currency')?.addEventListener('change', async (event) => {
+    if (event.target.value === 'USD') await prepareUsdRate(false);
+    else updateMovementCurrencyUI();
+});
+document.getElementById('movement-amount')?.addEventListener('input', updateMovementCurrencyUI);
+document.getElementById('movement-transfer-fee')?.addEventListener('input', updateMovementCurrencyUI);
 document.getElementById('movement-search')?.addEventListener('input', loadMovements);
 document.getElementById('movement-filter-type')?.addEventListener('change', loadMovements);
 document.getElementById('movement-filter-status')?.addEventListener('change', loadMovements);

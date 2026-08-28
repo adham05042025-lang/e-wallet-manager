@@ -312,8 +312,11 @@ async function loadSalaryForm() {
 
     monthInput.value = currentMonth;
 
-    const { data: salary } = await supabaseClient.from('salaries').select('*').eq('month_year', currentMonth).single();
-
+const { data: salary } = await supabaseClient
+  .from('salaries')
+  .select('*')
+  .eq('month_year', currentMonth)
+  .maybeSingle();
     if (salary) {
         document.getElementById('salary-amount').value = salary.amount;
         document.getElementById('salary-received').checked = salary.is_received;
@@ -329,8 +332,11 @@ document.getElementById('salary-form')?.addEventListener('submit', async (e) => 
     const amount = Number(document.getElementById('salary-amount').value);
     const isReceived = document.getElementById('salary-received').checked;
 
-    const { data: existing } = await supabaseClient.from('salaries').select('id').eq('month_year', monthYear).single();
-
+const { data: existing } = await supabaseClient
+  .from('salaries')
+  .select('id')
+  .eq('month_year', monthYear)
+  .maybeSingle();
     if (existing) {
         await supabaseClient.from('salaries').update({ amount, is_received: isReceived }).eq('id', existing.id);
     } else {

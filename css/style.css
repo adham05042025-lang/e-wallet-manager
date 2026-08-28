@@ -845,3 +845,143 @@ button:disabled {
 @media (max-width: 768px) {
     .fx-attribution { position: static; padding: 12px; text-align: center; }
 }
+
+
+/* Mobile-first card lists and compact navigation */
+.mobile-card-list { min-width: 0; }
+
+@media (max-width: 768px) {
+    .app-layout { display: block; min-height: 100svh; }
+    .sidebar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        width: 100%;
+        height: auto;
+        padding: 8px 10px;
+        border-right: 0;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(15, 23, 42, 0.96);
+        backdrop-filter: blur(16px);
+    }
+    .brand { margin: 0 0 7px; font-size: 15px; line-height: 1; }
+    .nav-menu {
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+    }
+    .nav-menu::-webkit-scrollbar { display: none; }
+    .nav-item {
+        flex: 0 0 auto;
+        min-height: 38px;
+        width: auto;
+        padding: 9px 11px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        font-size: 11px;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .nav-item.active { border: 1px solid rgba(16, 185, 129, 0.5); border-bottom-width: 1px; background: var(--accent-soft); }
+    .btn-logout {
+        position: absolute;
+        top: 8px;
+        right: 10px;
+        width: auto;
+        min-height: 30px;
+        margin: 0;
+        padding: 5px 9px;
+        font-size: 10px;
+    }
+    .main-content { padding: 16px 12px 36px; }
+
+    .mobile-card-list,
+    .mobile-card-list table,
+    .mobile-card-list tbody { display: block; width: 100%; min-width: 0; }
+    .mobile-card-list { overflow: visible; background: transparent; border: 0; }
+    .mobile-card-list thead { display: none; }
+    .mobile-card-list tbody { display: grid; gap: 10px; }
+    .mobile-card-list tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(90px, auto);
+        gap: 11px 14px;
+        width: 100%;
+        min-width: 0;
+        padding: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.19);
+        border-radius: 14px;
+        background: linear-gradient(145deg, rgba(30, 41, 59, 0.98), rgba(17, 31, 51, 0.96));
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+    }
+    .mobile-card-list td {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        text-align: left;
+        overflow-wrap: anywhere;
+    }
+    .mobile-card-list td::before {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text-secondary);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+        text-transform: uppercase;
+    }
+    .mobile-card-list td:last-child {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .mobile-card-list td:last-child::before { display: none; }
+    .mobile-card-list td .btn { width: auto !important; min-height: 38px; margin: 0 !important; }
+    .mobile-card-list .empty-state { display: block; padding: 20px !important; text-align: center; }
+
+    .daily-expenses-list td:nth-child(1)::before { content: 'Description'; }
+    .daily-expenses-list td:nth-child(2)::before { content: 'Amount'; }
+    .daily-expenses-list td:nth-child(3)::before { content: 'Time'; }
+    .clients-list td:nth-child(1)::before { content: 'Client'; }
+    .clients-list td:nth-child(2)::before { content: 'Total budget'; }
+    .clients-list td:nth-child(3)::before { content: 'Remaining'; }
+    .clients-list td:nth-child(4)::before { content: 'Status'; }
+    .tasks-list td:nth-child(1)::before { content: 'Task'; }
+    .tasks-list td:nth-child(2)::before { content: 'Client'; }
+    .tasks-list td:nth-child(3)::before { content: 'Cost'; }
+    .tasks-list td:nth-child(4)::before { content: 'Status'; }
+    .salary-history-list td:nth-child(1)::before { content: 'Month'; }
+    .salary-history-list td:nth-child(2)::before { content: 'Amount'; }
+    .salary-history-list td:nth-child(3)::before { content: 'Status'; }
+    .expenses-list td:nth-child(1)::before { content: 'Obligation'; }
+    .expenses-list td:nth-child(2)::before { content: 'Amount'; }
+    .expenses-list td:nth-child(3)::before { content: 'Due date'; }
+    .expenses-list td:nth-child(4)::before { content: 'Payment'; }
+    .movements-list td:nth-child(1)::before { content: 'Type'; }
+    .movements-list td:nth-child(2)::before { content: 'Person / description'; }
+    .movements-list td:nth-child(3)::before { content: 'Amount'; }
+    .movements-list td:nth-child(4)::before { content: 'Status'; }
+    .movements-list td:nth-child(5)::before { content: 'Due date'; }
+    .movements-list .movements-table { min-width: 0; }
+    .movement-actions { min-width: 0; }
+    .mobile-card-list .movement-type-badge { max-width: 100%; }
+}
+
+@media (max-width: 390px) {
+    .nav-item { padding-inline: 9px; font-size: 10px; }
+    .btn-logout { font-size: 9px; padding-inline: 7px; }
+    .mobile-card-list tr { grid-template-columns: 1fr; }
+    .mobile-card-list td:nth-last-child(2) { grid-column: 1; }
+}

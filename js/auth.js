@@ -60,7 +60,7 @@ loginForm?.addEventListener('submit', async (event) => {
         return;
     }
     setAuthMessage('login-message', 'Signed in successfully.', false);
-    showApp();
+    // onAuthStateChange also calls showApp; the shared promise prevents duplicate loading.
 });
 
 registerForm?.addEventListener('submit', async (event) => {
@@ -108,16 +108,31 @@ btnLogout?.addEventListener('click', async () => {
     showAuth();
 });
 
+let appLoadPromise = null;
+
 async function showApp() {
-    authContainer?.classList.add('hidden');
-    appContainer?.classList.remove('hidden');
+    // Auth events can fire at the same time as the login submit handler.
+    // Share one load promise so the Supabase caches are initialized only once.
+    if (appLoadPromise) return appLoadPromise;
+
+    appLoadPromise = (async () => {
+        authContainer?.classList.add('hidden');
+        appContainer?.classList.remove('hidden');
+        try {
+            if (typeof initializeMovementStorage === 'function') await initializeMovementStorage();
+            if (typeof initializeRecurringObligations === 'function') await initializeRecurringObligations();
+            if (typeof loadDashboardData === 'function') await loadDashboardData();
+        } catch (error) {
+            console.error('Could not load Supabase data:', error);
+            const detail = error?.message ? ` (${error.message})` : '';
+            alert(`Could not load your wallet data${detail}. Please refresh and try again.`);
+        }
+    })();
+
     try {
-        if (typeof initializeMovementStorage === 'function') await initializeMovementStorage();
-        if (typeof initializeRecurringObligations === 'function') await initializeRecurringObligations();
-        if (typeof loadDashboardData === 'function') await loadDashboardData();
-    } catch (error) {
-        console.error('Could not load Supabase data:', error);
-        alert('Could not load your wallet data. Please refresh and try again.');
+        await appLoadPromise;
+    } finally {
+        appLoadPromise = null;
     }
 }
 

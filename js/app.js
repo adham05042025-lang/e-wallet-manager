@@ -11,9 +11,8 @@ const getCurrentMonthYear = () => {
 // 1. Dashboard & Calculations Engine
 async function loadDashboardData() {
     const currentMonth = getCurrentMonthYear();
-    const todayDate = new Date().toISOString().split('T')[0];
 
-    // Fixed Salary
+    // 1. Fixed Salary (المرتبات المقبوضة)
     const { data: salaries } = await supabaseClient
         .from('salaries')
         .select('amount')
@@ -23,16 +22,19 @@ async function loadDashboardData() {
     const salaryIncome =
         salaries?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
-    // Clients Received Revenue
+    // 2. Clients Income (المبالغ المحصلة فعلياً = Total Budget - Remaining Budget)
     const { data: clients } = await supabaseClient
         .from('clients')
-        .select('total_budget, is_collected');
+        .select('total_budget, remaining_budget');
 
     const clientsIncome =
-        clients?.filter(c => c.is_collected !== false)
-                .reduce((sum, item) => sum + Number(item.total_budget), 0) || 0;
+        clients?.reduce((sum, item) => {
+            const total = Number(item.total_budget || 0);
+            const remaining = Number(item.remaining_budget || 0);
+            return sum + (total - remaining);
+        }, 0) || 0;
 
-    // Paid Fixed Expenses
+    // 3. Paid Fixed Expenses (المصروفات الثابتة المدفوعة)
     const { data: expenses } = await supabaseClient
         .from('expenses')
         .select('amount')
@@ -42,16 +44,16 @@ async function loadDashboardData() {
     const totalFixedExpenses =
         expenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
-    // Daily Expenses Total
+    // 4. Daily Expenses Total (إجمالي المصروفات اليومية للشهر)
     const { data: dailyExpenses } = await supabaseClient
         .from('daily_expenses')
-        .select('*')
+        .select('amount')
         .gte('created_at', `${currentMonth}-01`);
 
     const totalDailyExpenses =
         dailyExpenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
-    // Manual Balance Adjustment
+    // 5. Manual Balance Adjustment (تعديل الرصيد المخصص)
     const { data: balanceAdjustments } = await supabaseClient
         .from('balance_adjustments')
         .select('amount')
@@ -64,11 +66,10 @@ async function loadDashboardData() {
             ? Number(balanceAdjustments[0].amount)
             : 0;
 
-    // Final Calculation Formula
+    // المعادلة الموحدة للرصيد المتاح
     const availableToSpend =
-        (salaryIncome + clientsIncome) -
-        (totalFixedExpenses + totalDailyExpenses) +
-        balanceAdjustment;
+        (salaryIncome + clientsIncome + balanceAdjustment) -
+        (totalFixedExpenses + totalDailyExpenses);
 
     // Update Dashboard UI Cards
     if (document.getElementById('dash-salary'))
@@ -110,13 +111,10 @@ async function setAvailableBalance(targetAmount) {
 
     if (isNaN(target)) return;
 
-    const adjustmentAmount = target;
-    if (adjustmentAmount === 0) return;
-
     const { error } = await supabaseClient
         .from('balance_adjustments')
         .insert([{
-            amount: adjustmentAmount,
+            amount: target,
             month_year: currentMonth,
             created_at: new Date().toISOString()
         }]);
@@ -187,7 +185,7 @@ async function deleteDailyExpense(id) {
     }
 }
 
-// 4. Clients & Receivables Module (المستحقات والديون)
+// 4. Clients & Receivables Module (تحصيل جزئي أو كلي)
 async function loadClients() {
     const { data: clients, error } = await supabaseClient.from('clients').select('*').order('id', { ascending: false });
     if (error) return console.error(error);
@@ -202,9 +200,11 @@ async function loadClients() {
     let pendingTotal = 0;
 
     clients?.forEach(client => {
-        const isPending = client.is_collected === false;
+        const remaining = Number(client.remaining_budget || 0);
+        const isPending = client.is_collected === false && remaining > 0;
+
         if (isPending) {
-            pendingTotal += Number(client.total_budget || 0);
+            pendingTotal += remaining;
         }
 
         if (tbody) {
@@ -212,14 +212,14 @@ async function loadClients() {
                 <tr>
                     <td>${client.name}</td>
                     <td>$${Number(client.total_budget).toLocaleString()}</td>
-                    <td><strong>$${Number(client.remaining_budget).toLocaleString()}</strong></td>
+                    <td><strong>$${remaining.toLocaleString()}</strong></td>
                     <td>
                         <span class="status-badge ${isPending ? 'pending' : 'collected'}">
                             ${isPending ? 'Pending' : 'Collected'}
                         </span>
                     </td>
                     <td>
-                        ${isPending ? `<button class="btn btn-primary btn-sm" onclick="collectClientIncome(${client.id})">Collect Income</button>` : '<span style="color: var(--text-secondary); font-size: 12px;">Collected</span>'}
+                        ${isPending ? `<button class="btn btn-primary btn-sm" onclick="collectClientIncome(${client.id}, ${remaining})">Collect Income</button>` : '<span style="color: var(--text-secondary); font-size: 12px;">Fully Collected</span>'}
                         <button class="btn btn-secondary btn-sm" style="width: auto;" onclick="deleteClient(${client.id})">Delete</button>
                     </td>
                 </tr>
@@ -240,12 +240,14 @@ document.getElementById('form-client')?.addEventListener('submit', async (e) => 
     e.preventDefault();
     const name = document.getElementById('client-name').value;
     const budget = Number(document.getElementById('client-budget').value);
-    const isCollected = document.getElementById('client-is-collected')?.checked ?? true;
+    const isCollected = document.getElementById('client-is-collected')?.checked ?? false;
+
+    const remaining = isCollected ? 0 : budget;
 
     const { error } = await supabaseClient.from('clients').insert([{
         name: name,
         total_budget: budget,
-        remaining_budget: budget,
+        remaining_budget: remaining,
         is_collected: isCollected
     }]);
 
@@ -256,14 +258,37 @@ document.getElementById('form-client')?.addEventListener('submit', async (e) => 
     }
 });
 
-async function collectClientIncome(clientId) {
+// إمكانية تحصيل جزء من المبلغ أو تحصيله بالكامل
+async function collectClientIncome(clientId, currentRemaining) {
+    const input = prompt(`Enter amount to collect (Remaining: $${currentRemaining}):`, currentRemaining);
+    if (input === null) return; // Cancelled
+
+    const collectAmount = Number(input);
+    if (isNaN(collectAmount) || collectAmount <= 0) {
+        alert('Please enter a valid positive amount.');
+        return;
+    }
+
+    if (collectAmount > currentRemaining) {
+        alert('Collected amount cannot exceed the remaining balance.');
+        return;
+    }
+
+    const newRemaining = currentRemaining - collectAmount;
+    const isFullyCollected = newRemaining === 0;
+
     const { error } = await supabaseClient
         .from('clients')
-        .update({ is_collected: true })
+        .update({ 
+            remaining_budget: newRemaining,
+            is_collected: isFullyCollected 
+        })
         .eq('id', clientId);
 
     if (!error) {
         loadDashboardData();
+    } else {
+        console.error('Error collecting client income:', error);
     }
 }
 
@@ -329,7 +354,7 @@ async function completeTask(taskId, clientId, taskCost) {
 
     const { data: client } = await supabaseClient.from('clients').select('remaining_budget').eq('id', clientId).single();
     if (client) {
-        const newRemaining = client.remaining_budget - taskCost;
+        const newRemaining = Math.max(0, client.remaining_budget - taskCost);
         await supabaseClient.from('clients').update({ remaining_budget: newRemaining }).eq('id', clientId);
     }
 
@@ -482,17 +507,26 @@ async function generateReport() {
     const { data: salary } = await supabaseClient.from('salaries').select('amount').eq('month_year', month).eq('is_received', true);
     const { data: expenses } = await supabaseClient.from('expenses').select('amount').eq('month_year', month).eq('is_paid', true);
     const { data: daily } = await supabaseClient.from('daily_expenses').select('amount').gte('created_at', `${month}-01`);
-    const { data: clients } = await supabaseClient.from('clients').select('total_budget, is_collected');
+    const { data: clients } = await supabaseClient.from('clients').select('total_budget, remaining_budget');
+    const { data: balanceAdjustments } = await supabaseClient.from('balance_adjustments').select('amount').eq('month_year', month).order('created_at', { ascending: false }).limit(1);
 
     const totalSalary = salary?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
     const totalExpenses = expenses?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
     const totalDaily = daily?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
-    const totalClients = clients?.filter(c => c.is_collected !== false).reduce((sum, i) => sum + Number(i.total_budget), 0) || 0;
+    
+    const totalClients = clients?.reduce((sum, i) => {
+        const total = Number(i.total_budget || 0);
+        const remaining = Number(i.remaining_budget || 0);
+        return sum + (total - remaining);
+    }, 0) || 0;
 
-    const netProfit = (totalSalary + totalClients) - (totalExpenses + totalDaily);
+    const balanceAdjustment = balanceAdjustments?.[0] ? Number(balanceAdjustments[0].amount) : 0;
+
+    const netProfit = (totalSalary + totalClients + balanceAdjustment) - (totalExpenses + totalDaily);
 
     document.getElementById('report-results').innerHTML = `
-        <p><strong>Total Income (Salary + Clients):</strong> $${(totalSalary + totalClients).toLocaleString()}</p>
+        <p><strong>Total Income (Salary + Collected Clients):</strong> $${(totalSalary + totalClients).toLocaleString()}</p>
+        <p><strong>Balance Adjustment:</strong> $${balanceAdjustment.toLocaleString()}</p>
         <p><strong>Fixed Paid Expenses:</strong> $${totalExpenses.toLocaleString()}</p>
         <p><strong>Total Daily Expenses:</strong> $${totalDaily.toLocaleString()}</p>
         <hr style="margin: 10px 0; border-color: var(--border-color);">

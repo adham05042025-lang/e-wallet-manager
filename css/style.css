@@ -810,3 +810,38 @@ button:disabled {
     .nav-menu { grid-template-columns: 1fr 1fr; }
     .auth-brand-block h1 { font-size: 30px; }
 }
+
+
+/* Currency conversion UI */
+.fx-fields {
+    margin: 6px 0 14px;
+    padding: 14px;
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    border-radius: 12px;
+    background: rgba(56, 189, 248, 0.055);
+}
+.fx-preview {
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: #bae6fd;
+    background: rgba(14, 116, 144, 0.18);
+    font-size: 13px;
+    font-weight: 600;
+}
+.fx-rate { color: #7dd3fc; }
+.fx-fee { color: #fbbf24; }
+.fx-attribution {
+    position: fixed;
+    right: 12px;
+    bottom: 10px;
+    z-index: 10;
+    color: var(--text-secondary);
+    font-size: 10px;
+    opacity: 0.72;
+}
+.fx-attribution a { color: inherit; }
+
+@media (max-width: 768px) {
+    .fx-attribution { position: static; padding: 12px; text-align: center; }
+}

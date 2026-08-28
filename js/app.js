@@ -23,19 +23,24 @@ async function loadDashboardData() {
         salaries?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
     // 2. Clients Income (المبالغ المحصلة فعلياً = Total Budget - Remaining Budget)
-    const { data: clients } = await supabaseClient
+    let { data: clients, error: clientsError } = await supabaseClient
         .from('clients')
-        .select('total_budget, remaining_budget');
+        .select('total_budget, remaining_budget, total_budget_egp, remaining_budget_egp, currency');
+    // Keep existing wallets readable while the additive client-currency migration is being applied.
+    if (clientsError) {
+        const fallback = await supabaseClient.from('clients').select('total_budget, remaining_budget');
+        clients = fallback.data || [];
+    }
 
     const clientsIncome =
         clients?.reduce((sum, item) => {
-            const total = Number(item.total_budget || 0);
-            const remaining = Number(item.remaining_budget || 0);
+            const total = Number(item.total_budget_egp ?? item.total_budget ?? 0);
+            const remaining = Number(item.remaining_budget_egp ?? item.remaining_budget ?? 0);
             return sum + (total - remaining);
         }, 0) || 0;
 
     const clientPendingIncome =
-        clients?.reduce((sum, item) => sum + Number(item.remaining_budget || 0), 0) || 0;
+        clients?.reduce((sum, item) => sum + Number(item.remaining_budget_egp ?? item.remaining_budget ?? 0), 0) || 0;
 
     // 3. Paid Fixed Expenses (المصروفات الثابتة المدفوعة)
     const { data: expenses } = await supabaseClient
@@ -221,26 +226,29 @@ async function loadClients() {
     let pendingTotal = 0;
 
     clients?.forEach(client => {
+        const currency = client.currency === 'USD' ? 'USD' : HOME_CURRENCY;
         const remaining = Number(client.remaining_budget || 0);
+        const totalEgp = Number(client.total_budget_egp ?? client.total_budget ?? 0);
+        const remainingEgp = Number(client.remaining_budget_egp ?? remaining);
         const isPending = client.is_collected === false && remaining > 0;
 
         if (isPending) {
-            pendingTotal += remaining;
+            pendingTotal += remainingEgp;
         }
 
         if (tbody) {
             tbody.innerHTML += `
                 <tr>
                     <td>${client.name}</td>
-                    <td>${formatMoney(client.total_budget)}</td>
-                    <td><strong>${formatMoney(remaining)}</strong></td>
+                    <td><strong>${formatCurrency(client.total_budget, currency)}</strong><small class="movement-description">${formatMoney(totalEgp)} equivalent</small></td>
+                    <td><strong>${formatCurrency(remaining, currency)}</strong><small class="movement-description">${formatMoney(remainingEgp)} remaining</small></td>
                     <td>
                         <span class="status-badge ${isPending ? 'pending' : 'collected'}">
                             ${isPending ? 'Pending' : 'Collected'}
                         </span>
                     </td>
                     <td>
-                        ${isPending ? `<button class="btn btn-primary btn-sm" onclick="collectClientIncome(${client.id}, ${remaining})">Collect Income</button>` : '<span style="color: var(--text-secondary); font-size: 12px;">Fully Collected</span>'}
+                        ${isPending ? `<button class="btn btn-primary btn-sm" onclick="collectClientIncome(${client.id}, ${remaining}, ${remainingEgp}, '${currency}')">Collect Income</button>` : '<span style="color: var(--text-secondary); font-size: 12px;">Fully Collected</span>'}
                         <button class="btn btn-secondary btn-sm" style="width: auto;" onclick="deleteClient(${client.id})">Delete</button>
                     </td>
                 </tr>
@@ -257,31 +265,89 @@ async function loadClients() {
     }
 }
 
+async function prepareClientUsdRate() {
+    const rateInput = document.getElementById('client-exchange-rate');
+    const meta = document.getElementById('client-rate-meta');
+    if (!rateInput || typeof fetchUsdEgpRate !== 'function') return;
+    rateInput.placeholder = 'Fetching live rate…';
+    rateInput.readOnly = true;
+    try {
+        const result = await fetchUsdEgpRate(false);
+        rateInput.value = Number(result.rate).toFixed(4);
+        if (meta) meta.textContent = `Rate updated: ${result.lastUpdateUtc || 'just now'}`;
+        updateClientCurrencyUI();
+    } catch (error) {
+        rateInput.readOnly = false;
+        rateInput.value = '';
+        if (meta) meta.textContent = 'Could not fetch the rate. Enter it manually.';
+    }
+}
+
+function updateClientCurrencyUI() {
+    const currency = document.getElementById('client-currency')?.value || HOME_CURRENCY;
+    const fxFields = document.getElementById('client-fx-fields');
+    const rateInput = document.getElementById('client-exchange-rate');
+    const feeInput = document.getElementById('client-transfer-fee');
+    const preview = document.getElementById('client-fx-preview');
+    const amount = Number(document.getElementById('client-budget')?.value || 0);
+    const fee = Number(feeInput?.value || 0);
+    fxFields?.classList.toggle('hidden', currency !== 'USD');
+    if (currency !== 'USD') return;
+    const rate = Number(rateInput?.value || 0);
+    const netUsd = Math.max(0, amount - fee);
+    if (preview && rate > 0) preview.textContent = `${formatCurrency(netUsd, 'USD')} net × ${formatMoney(rate)} = ${formatMoney(netUsd * rate)}`;
+}
+
 document.getElementById('form-client')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = document.getElementById('client-name').value;
+    const name = document.getElementById('client-name').value.trim();
     const budget = Number(document.getElementById('client-budget').value);
+    const currency = document.getElementById('client-currency')?.value === 'USD' ? 'USD' : HOME_CURRENCY;
+    const transferFee = Number(document.getElementById('client-transfer-fee')?.value || 0);
+    const exchangeRate = Number(document.getElementById('client-exchange-rate')?.value || 0);
     const isCollected = document.getElementById('client-is-collected')?.checked ?? false;
 
+    if (!name || !Number.isFinite(budget) || budget <= 0) return alert('Enter a valid client name and budget.');
+    if (currency === 'USD' && (!Number.isFinite(exchangeRate) || exchangeRate <= 0)) return alert('A valid USD to EGP exchange rate is required.');
+    if (currency === 'USD' && (!Number.isFinite(transferFee) || transferFee < 0 || transferFee > budget)) return alert('Transfer fee must be between zero and the USD amount.');
+
+    const netForeign = currency === 'USD' ? Math.max(0, budget - transferFee) : budget;
+    const budgetEgp = currency === 'USD' ? netForeign * exchangeRate : budget;
     const remaining = isCollected ? 0 : budget;
+    const remainingEgp = isCollected ? 0 : budgetEgp;
 
     const { error } = await supabaseClient.from('clients').insert([{
-        name: name,
+        name,
         total_budget: budget,
         remaining_budget: remaining,
-        is_collected: isCollected
+        is_collected: isCollected,
+        currency,
+        transfer_fee: currency === 'USD' ? transferFee : 0,
+        exchange_rate: currency === 'USD' ? exchangeRate : 1,
+        total_budget_egp: budgetEgp,
+        remaining_budget_egp: remainingEgp
     }]);
 
-    if (!error) {
-        document.getElementById('form-client').reset();
-        if (typeof closeModal === 'function') closeModal('modal-client');
-        loadDashboardData();
+    if (error) {
+        console.error('Could not save client:', error);
+        return alert(`Could not save client: ${error.message}`);
     }
+    document.getElementById('form-client').reset();
+    updateClientCurrencyUI();
+    if (typeof closeModal === 'function') closeModal('modal-client');
+    loadDashboardData();
 });
 
+document.getElementById('client-currency')?.addEventListener('change', async (event) => {
+    if (event.target.value === 'USD') await prepareClientUsdRate();
+    else updateClientCurrencyUI();
+});
+document.getElementById('client-budget')?.addEventListener('input', updateClientCurrencyUI);
+document.getElementById('client-transfer-fee')?.addEventListener('input', updateClientCurrencyUI);
+
 // إمكانية تحصيل جزء من المبلغ أو تحصيله بالكامل
-async function collectClientIncome(clientId, currentRemaining) {
-    const input = prompt(`Enter amount to collect (Remaining: ${formatMoney(currentRemaining)}):`, currentRemaining);
+async function collectClientIncome(clientId, currentRemaining, currentRemainingEgp = currentRemaining, clientCurrency = HOME_CURRENCY) {
+    const input = prompt(`Enter amount to collect (Remaining: ${formatCurrency(currentRemaining, clientCurrency)}):`, currentRemaining);
     if (input === null) return; // Cancelled
 
     const collectAmount = Number(input);
@@ -302,6 +368,9 @@ async function collectClientIncome(clientId, currentRemaining) {
         .from('clients')
         .update({ 
             remaining_budget: newRemaining,
+            remaining_budget_egp: isFullyCollected
+                ? 0
+                : Number(currentRemainingEgp || currentRemaining) * (newRemaining / currentRemaining),
             is_collected: isFullyCollected 
         })
         .eq('id', clientId);

@@ -11,19 +11,36 @@ const mobileNavOverlay = document.getElementById('mobile-nav-overlay');
 
 function setMobileMenu(open) {
     if (!appSidebar || !mobileMenuToggle) return;
-    appSidebar.classList.toggle('mobile-menu-open', open);
-    mobileMenuToggle.setAttribute('aria-expanded', String(open));
-    mobileMenuToggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+    const shouldOpen = Boolean(open);
+    appSidebar.classList.toggle('mobile-menu-open', shouldOpen);
+    appSidebar.setAttribute('aria-hidden', String(!shouldOpen));
+    mobileMenuToggle.setAttribute('aria-expanded', String(shouldOpen));
+    mobileMenuToggle.setAttribute('aria-label', shouldOpen ? 'Close navigation menu' : 'Open navigation menu');
     const icon = mobileMenuToggle.querySelector('i');
     if (icon) {
-        icon.classList.toggle('fa-bars', !open);
-        icon.classList.toggle('fa-xmark', open);
+        icon.classList.toggle('fa-bars', !shouldOpen);
+        icon.classList.toggle('fa-xmark', shouldOpen);
     }
-    if (mobileNavOverlay) mobileNavOverlay.classList.toggle('hidden', !open);
-    document.body.classList.toggle('mobile-nav-is-open', open);
+    if (mobileNavOverlay) {
+        mobileNavOverlay.classList.toggle('hidden', !shouldOpen);
+        mobileNavOverlay.setAttribute('aria-hidden', String(!shouldOpen));
+    }
+    document.body.classList.toggle('mobile-nav-is-open', shouldOpen);
 }
 
-mobileMenuToggle?.addEventListener('click', () => {
+// Keep the drawer closed on first load and provide a reliable keyboard escape.
+setMobileMenu(false);
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && appSidebar?.classList.contains('mobile-menu-open')) {
+        setMobileMenu(false);
+        mobileMenuToggle?.focus();
+    }
+});
+
+mobileMenuToggle?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     setMobileMenu(!appSidebar?.classList.contains('mobile-menu-open'));
 });
 mobileNavOverlay?.addEventListener('click', () => setMobileMenu(false));
@@ -56,6 +73,8 @@ navItems.forEach(item => {
 window.addEventListener('resize', () => {
     if (window.innerWidth > 768) setMobileMenu(false);
 });
+
+window.setMobileMenu = setMobileMenu;
 
 // 2. إدارة النوافذ المنبثقة (Modals)
 function setupModal(openBtnId, modalId) {

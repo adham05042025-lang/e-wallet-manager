@@ -47,6 +47,7 @@
                 <button class="nav-item" data-target="sec-tasks">📋 Tasks</button>
                 <button class="nav-item" data-target="sec-salary">💼 Fixed Salary</button>
                 <button class="nav-item" data-target="sec-expenses">💸 Fixed Expenses</button>
+                <button class="nav-item" data-target="sec-movements">💰 Money Movements</button>
                 <button class="nav-item" data-target="sec-reports">📈 Reports</button>
             </nav>
             <button id="btn-logout" class="btn-logout">Sign Out</button>
@@ -84,6 +85,22 @@
                     <div class="stat-card highlight">
                         <h3>Available to Spend</h3>
                         <p id="dash-available">$0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Customer Payments Pending</h3>
+                        <p id="dash-customer-payments-pending" class="text-amber-400">$0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Held Customer Funds</h3>
+                        <p id="dash-held-funds" class="text-sky-400">$0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Loans Outstanding</h3>
+                        <p id="dash-loans-outstanding" class="text-orange-400">$0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>My Obligations</h3>
+                        <p id="dash-obligations" class="text-rose-400">$0</p>
                     </div>
                 </div>
 
@@ -217,6 +234,79 @@
                 </div>
             </section>
 
+            <!-- Money Movements Section -->
+            <section id="sec-movements" class="content-section hidden">
+                <div class="section-header">
+                    <div>
+                        <h2>Money Movements</h2>
+                        <p class="section-subtitle">Track customer payments, loans, receivables, and obligations in one place.</p>
+                    </div>
+                    <div class="section-actions">
+                        <button id="btn-export-movements" class="btn btn-secondary" style="width: auto;">⬇ Export Data</button>
+                        <button id="btn-import-movements" class="btn btn-secondary" style="width: auto;">⬆ Import Data</button>
+                        <input type="file" id="movement-import-file" accept="application/json" class="hidden">
+                        <button id="open-add-movement-modal" class="btn btn-primary" style="width: auto;">+ Add Movement</button>
+                    </div>
+                </div>
+
+                <div class="movement-summary-grid">
+                    <div class="summary-card summary-receivable">
+                        <span>Customer payments pending</span>
+                        <strong id="movement-summary-customer">$0</strong>
+                    </div>
+                    <div class="summary-card summary-held">
+                        <span>Held customer funds</span>
+                        <strong id="movement-summary-held">$0</strong>
+                    </div>
+                    <div class="summary-card summary-loan">
+                        <span>Loans outstanding</span>
+                        <strong id="movement-summary-loans">$0</strong>
+                    </div>
+                    <div class="summary-card summary-obligation">
+                        <span>My obligations</span>
+                        <strong id="movement-summary-obligations">$0</strong>
+                    </div>
+                </div>
+
+                <div class="filter-bar">
+                    <input type="search" id="movement-search" placeholder="Search by person or description...">
+                    <select id="movement-filter-type">
+                        <option value="all">All types</option>
+                        <option value="customer_paid_unreceived">Customer paid — not received</option>
+                        <option value="customer_received_undelivered">Received — delivery pending</option>
+                        <option value="loan_given">Loan given</option>
+                        <option value="receivable">Money owed to me</option>
+                        <option value="payable">Money I owe</option>
+                        <option value="other_income">Other income received</option>
+                        <option value="cash_expense">Other cash expense</option>
+                    </select>
+                    <select id="movement-filter-status">
+                        <option value="all">All statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="partial">Partially settled</option>
+                        <option value="overdue">Overdue</option>
+                        <option value="settled">Settled</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+
+                <div class="table-container">
+                    <table class="movements-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Person / Description</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Due date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="movements-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
             <!-- Reports Section -->
             <section id="sec-reports" class="content-section hidden">
                 <div class="section-header">
@@ -283,6 +373,68 @@
                 <input type="date" id="expense-date">
                 <div class="modal-actions">
                     <button type="submit" class="btn btn-primary">Save Expense</button>
+                    <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-movement" class="modal hidden">
+        <div class="modal-content modal-wide">
+            <h3 id="modal-movement-title">Add Money Movement</h3>
+            <form id="form-movement">
+                <input type="hidden" id="movement-id">
+                <div class="form-group">
+                    <label for="movement-title">Description</label>
+                    <input type="text" id="movement-title" placeholder="e.g. Ahmed's loan or order deposit" required>
+                </div>
+                <div class="form-group">
+                    <label for="movement-person">Person / Client (optional)</label>
+                    <input type="text" id="movement-person" placeholder="Name of the person or client">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="movement-amount">Amount</label>
+                        <input type="number" step="0.01" min="0.01" id="movement-amount" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="movement-date">Due date (optional)</label>
+                        <input type="date" id="movement-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="movement-settled-amount">Settled so far</label>
+                        <input type="number" step="0.01" min="0" id="movement-settled-amount" placeholder="0.00" value="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="movement-type">Movement type</label>
+                    <select id="movement-type" required>
+                        <option value="customer_paid_unreceived">Customer paid — I have not received it yet</option>
+                        <option value="customer_received_undelivered">I received payment — delivery is pending</option>
+                        <option value="loan_given">Loan given to someone</option>
+                        <option value="receivable">Money owed to me</option>
+                        <option value="payable">Money I owe</option>
+                        <option value="other_income">Other income received</option>
+                        <option value="cash_expense">Other cash expense</option>
+                    </select>
+                    <small id="movement-type-help" class="field-help">This amount will be tracked as money you expect to receive, not as available cash.</small>
+                </div>
+                <div class="form-group">
+                    <label for="movement-status">Status</label>
+                    <select id="movement-status" required>
+                        <option value="pending">Pending</option>
+                        <option value="partial">Partially settled</option>
+                        <option value="overdue">Overdue</option>
+                        <option value="settled">Settled</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="movement-notes">Notes (optional)</label>
+                    <textarea id="movement-notes" rows="3" placeholder="Add a reminder, reference, or delivery note..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save Movement</button>
                     <button type="button" class="btn btn-secondary close-modal">Cancel</button>
                 </div>
             </form>

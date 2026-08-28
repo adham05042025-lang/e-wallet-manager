@@ -62,6 +62,7 @@ function setupModal(openBtnId, modalId) {
 setupModal('open-add-client-modal', 'modal-client');
 setupModal('open-add-task-modal', 'modal-task');
 setupModal('open-add-expense-modal', 'modal-expense');
+setupModal('open-add-movement-modal', 'modal-movement');
 
 // دالة إغلاق المودال برمجياً بعد الحفظ
 function closeModal(modalId) {

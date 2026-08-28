@@ -96,7 +96,11 @@ btnLogout.addEventListener('click', async () => {
 function showApp() {
     authContainer.classList.add('hidden');
     appContainer.classList.remove('hidden');
-    if (typeof loadDashboardData === 'function') {
+    if (typeof initializeMovementStorage === 'function') {
+        initializeMovementStorage().then(() => {
+            if (typeof loadDashboardData === 'function') loadDashboardData();
+        });
+    } else if (typeof loadDashboardData === 'function') {
         loadDashboardData();
     }
 }

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Wallet Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Auth Container -->
+    <div id="auth-container" class="auth-wrapper">
+        <div class="auth-card">
+            <h2>E-Wallet Management</h2>
+            <form id="auth-form">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="auth-email" placeholder="name@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="auth-password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" id="btn-login" class="btn btn-primary">Sign In</button>
+                <button type="button" id="btn-signup" class="btn btn-secondary">Create Account</button>
+                <p id="auth-message" class="error-msg"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App Layout -->
+    <div id="app-container" class="app-layout hidden">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <span>💳 E-Wallet</span>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-item active" data-target="sec-dashboard">📊 Dashboard</button>
+                <button class="nav-item" data-target="sec-clients">👥 Clients</button>
+                <button class="nav-item" data-target="sec-tasks">📋 Tasks</button>
+                <button class="nav-item" data-target="sec-salary">💼 Fixed Salary</button>
+                <button class="nav-item" data-target="sec-expenses">💸 Fixed Expenses</button>
+                <button class="nav-item" data-target="sec-reports">📈 Reports</button>
+            </nav>
+            <button id="btn-logout" class="btn-logout">Sign Out</button>
+        </aside>
+
+        <!-- Main Content View -->
+        <main class="main-content">
+            
+            <!-- Dashboard Section -->
+            <section id="sec-dashboard" class="content-section">
+                <h2>Dashboard</h2>
+                
+                <!-- Financial Overview Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Salary Received</h3>
+                        <p id="dash-salary">$0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Clients Revenue</h3>
+                        <p id="dash-clients-income">$0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Fixed Expenses</h3>
+                        <p id="dash-expenses">$0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Daily Expenses Total</h3>
+                        <p id="dash-daily-expenses" style="color: var(--danger);">$0</p>
+                    </div>
+                    <div class="stat-card highlight">
+                        <h3>Available to Spend</h3>
+                        <p id="dash-available">$0</p>
+                    </div>
+                </div>
+
+                <!-- Custom Available Balance Adjustment Form -->
+                <div class="section-header" style="margin-top: 32px;">
+                    <h3>Set Target Available Balance</h3>
+                </div>
+                <div class="auth-card" style="max-width: 100%; margin-bottom: 24px; background: rgba(255, 255, 255, 0.03);">
+                    <form id="form-adjust-available" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                        <input type="number" id="custom-available-input" placeholder="Enter target available amount" required style="flex: 2; min-width: 200px;">
+                        <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 24px; margin: 0;">Set Balance</button>
+                    </form>
+                </div>
+
+                <!-- Quick Add Daily Expense Section -->
+                <div class="section-header" style="margin-top: 24px;">
+                    <h3>Quick Add Daily Expense</h3>
+                </div>
+                <div class="auth-card" style="max-width: 100%; margin-bottom: 24px;">
+                    <form id="form-daily-expense" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <input type="text" id="daily-title" placeholder="Expense description (e.g. Coffee, Taxi)" required style="flex: 2; min-width: 200px;">
+                        <input type="number" id="daily-amount" placeholder="Amount ($)" required style="flex: 1; min-width: 120px;">
+                        <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 24px; margin: 0;">+ Add Expense</button>
+                    </form>
+                </div>
+
+                <!-- Today's Expenses Log -->
+                <h3>Today's Expenses Log</h3>
+                <div class="table-container" style="margin-top: 12px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Time</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="daily-expenses-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Clients Section -->
+            <section id="sec-clients" class="content-section hidden">
+                <div class="section-header">
+                    <h2>Clients Management</h2>
+                    <button id="open-add-client-modal" class="btn btn-primary" style="width: auto;">+ Add Client</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Client Name</th>
+                                <th>Total Budget</th>
+                                <th>Remaining Budget</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clients-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Tasks Section -->
+            <section id="sec-tasks" class="content-section hidden">
+                <div class="section-header">
+                    <h2>Tasks Management</h2>
+                    <button id="open-add-task-modal" class="btn btn-primary" style="width: auto;">+ Add Task</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Task Title</th>
+                                <th>Client</th>
+                                <th>Cost</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tasks-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Fixed Salary Section -->
+            <section id="sec-salary" class="content-section hidden">
+                <h2>Fixed Salary</h2>
+                <div class="auth-card" style="max-width: 500px; margin-top: 20px;">
+                    <form id="salary-form">
+                        <div class="form-group">
+                            <label>Month / Year</label>
+                            <input type="month" id="salary-month" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Salary Amount ($)</label>
+                            <input type="number" id="salary-amount" placeholder="0.00" required>
+                        </div>
+                        <div class="form-group" style="display: flex; gap: 10px; align-items: center;">
+                            <input type="checkbox" id="salary-received" style="width: auto;">
+                            <label for="salary-received" style="margin: 0;">Received for this month</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Salary Data</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Expenses Section -->
+            <section id="sec-expenses" class="content-section hidden">
+                <div class="section-header">
+                    <h2>Fixed Expenses & Obligations</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-copy-expenses" class="btn btn-secondary" style="width: auto;">📋 Copy to Next Month</button>
+                        <button id="open-add-expense-modal" class="btn btn-primary" style="width: auto;">+ Add Expense</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Amount</th>
+                                <th>Due Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenses-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="sec-reports" class="content-section hidden">
+                <div class="section-header">
+                    <h2>Monthly Reports</h2>
+                    <button id="btn-export-pdf" class="btn btn-primary" style="width: auto;">📄 Export PDF</button>
+                </div>
+                <div class="form-group" style="max-width: 300px;">
+                    <label>Select Month</label>
+                    <input type="month" id="report-month">
+                </div>
+                <div id="report-results" class="stat-card" style="margin-top: 20px;"></div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Modals Framework -->
+    <div id="modal-client" class="modal hidden">
+        <div class="modal-content">
+            <h3>Add New Client</h3>
+            <form id="form-client">
+                <input type="text" id="client-name" placeholder="Client Name" required>
+                <input type="number" id="client-budget" placeholder="Total Budget ($)" required>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-task" class="modal hidden">
+        <div class="modal-content">
+            <h3>Add New Task</h3>
+            <form id="form-task">
+                <select id="task-client-id" required>
+                    <option value="">Select Client...</option>
+                </select>
+                <input type="text" id="task-title" placeholder="Task Title" required>
+                <input type="number" id="task-cost" placeholder="Task Cost ($)" required>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save Task</button>
+                    <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-expense" class="modal hidden">
+        <div class="modal-content">
+            <h3>Add Fixed Expense</h3>
+            <form id="form-expense">
+                <input type="text" id="expense-title" placeholder="Title (e.g., Internet, Rent)" required>
+                <input type="number" id="expense-amount" placeholder="Amount ($)" required>
+                <input type="date" id="expense-date">
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save Expense</button>
+                    <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- External Libraries & Application Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -425,3 +425,151 @@ tr:last-child td {
     font-size: 12px;
     border-radius: 4px;
 }
+
+
+/* ==========================================
+   Money Movements Module
+   ========================================== */
+.section-subtitle {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 8px;
+    line-height: 1.5;
+}
+
+.section-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.movement-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.summary-card {
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.summary-card span {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+.summary-card strong {
+    display: block;
+    font-size: 21px;
+}
+
+.summary-receivable { border-color: rgba(245, 158, 11, 0.38); }
+.summary-receivable strong { color: #fbbf24; }
+.summary-held { border-color: rgba(56, 189, 248, 0.38); }
+.summary-held strong { color: #38bdf8; }
+.summary-loan { border-color: rgba(249, 115, 22, 0.38); }
+.summary-loan strong { color: #fb923c; }
+.summary-obligation { border-color: rgba(251, 113, 133, 0.38); }
+.summary-obligation strong { color: #fb7185; }
+
+.filter-bar {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.5fr) repeat(2, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.filter-bar input,
+.filter-bar select,
+.modal-content textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font: inherit;
+    resize: vertical;
+}
+
+.filter-bar input:focus,
+.filter-bar select:focus,
+.modal-content textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.modal-wide { max-width: 620px; }
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+.field-help {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+    margin-top: 7px;
+}
+
+.movement-type-badge {
+    display: inline-block;
+    max-width: 190px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 1.35;
+    font-weight: 600;
+}
+.type-customer_paid_unreceived { color: #fbbf24; background: rgba(245, 158, 11, 0.15); }
+.type-customer_received_undelivered { color: #38bdf8; background: rgba(56, 189, 248, 0.15); }
+.type-loan_given { color: #fb923c; background: rgba(249, 115, 22, 0.15); }
+.type-receivable { color: #a78bfa; background: rgba(139, 92, 246, 0.15); }
+.type-payable { color: #fb7185; background: rgba(244, 63, 94, 0.15); }
+.type-other_income { color: #34d399; background: rgba(16, 185, 129, 0.15); }
+.type-cash_expense { color: #f87171; background: rgba(239, 68, 68, 0.15); }
+
+.movement-status-pending { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.movement-status-partial { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.3); }
+.movement-status-overdue { background: rgba(239, 68, 68, 0.16); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.movement-status-settled { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+.movement-status-cancelled { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); }
+
+.movement-description,
+.settlement-note {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-top: 4px;
+}
+.settlement-note { color: #c4b5fd; }
+.due-overdue { color: #f87171; font-weight: 600; }
+.muted { color: var(--text-secondary); }
+.empty-state { color: var(--text-secondary); text-align: center; padding: 28px !important; }
+.movement-actions { min-width: 210px; }
+.btn-danger { background: rgba(239, 68, 68, 0.14); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
+.btn-danger:hover { background: rgba(239, 68, 68, 0.28); }
+.btn:active { transform: scale(0.98); }
+
+@media (max-width: 900px) {
+    .filter-bar { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; gap: 0; }
+    .section-header { align-items: flex-start; gap: 14px; }
+}
+
+@media (max-width: 768px) {
+    .section-header { flex-direction: column; }
+    .section-actions { width: 100%; justify-content: flex-start; }
+    .section-actions .btn { flex: 1; }
+    .movements-table { min-width: 760px; }
+}

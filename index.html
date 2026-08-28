@@ -106,43 +106,43 @@
                 <div class="stats-grid">
                     <div class="stat-card">
                         <h3>Salary Received</h3>
-                        <p id="dash-salary">$0</p>
+                        <p id="dash-salary">ج.م 0</p>
                     </div>
                     <div class="stat-card">
                         <h3>Collected Revenue</h3>
-                        <p id="dash-clients-income" class="text-emerald-400">$0</p>
+                        <p id="dash-clients-income" class="text-emerald-400">ج.م 0</p>
                     </div>
                     <div class="stat-card">
                         <h3>Pending Income ⏳</h3>
-                        <p id="dash-pending-income" class="text-amber-400">$0</p>
+                        <p id="dash-pending-income" class="text-amber-400">ج.م 0</p>
                     </div>
                     <div class="stat-card">
                         <h3>Fixed Expenses</h3>
-                        <p id="dash-expenses">$0</p>
+                        <p id="dash-expenses">ج.م 0</p>
                     </div>
                     <div class="stat-card">
                         <h3>Daily Expenses Total</h3>
-                        <p id="dash-daily-expenses" style="color: var(--danger);">$0</p>
+                        <p id="dash-daily-expenses" style="color: var(--danger);">ج.م 0</p>
                     </div>
                     <div class="stat-card highlight">
                         <h3>Available to Spend</h3>
-                        <p id="dash-available">$0</p>
+                        <p id="dash-available">ج.م 0</p>
                     </div>
                     <div class="stat-card">
                         <h3>Customer Payments Pending</h3>
-                        <p id="dash-customer-payments-pending" class="text-amber-400">$0</p>
+                        <p id="dash-customer-payments-pending" class="text-amber-400">ج.م 0</p>
                     </div>
                     <div class="stat-card">
                         <h3>Held Customer Funds</h3>
-                        <p id="dash-held-funds" class="text-sky-400">$0</p>
+                        <p id="dash-held-funds" class="text-sky-400">ج.م 0</p>
                     </div>
                     <div class="stat-card">
                         <h3>Loans Outstanding</h3>
-                        <p id="dash-loans-outstanding" class="text-orange-400">$0</p>
+                        <p id="dash-loans-outstanding" class="text-orange-400">ج.م 0</p>
                     </div>
                     <div class="stat-card">
                         <h3>My Obligations</h3>
-                        <p id="dash-obligations" class="text-rose-400">$0</p>
+                        <p id="dash-obligations" class="text-rose-400">ج.م 0</p>
                     </div>
                 </div>
 
@@ -164,7 +164,7 @@
                 <div class="auth-card" style="max-width: 100%; margin-bottom: 24px;">
                     <form id="form-daily-expense" style="display: flex; gap: 12px; flex-wrap: wrap;">
                         <input type="text" id="daily-title" placeholder="Expense description (e.g. Coffee, Taxi)" required style="flex: 2; min-width: 200px;">
-                        <input type="number" id="daily-amount" placeholder="Amount ($)" required style="flex: 1; min-width: 120px;">
+                        <input type="number" id="daily-amount" placeholder="Amount (ج.م)" required style="flex: 1; min-width: 120px;">
                         <button type="submit" class="btn btn-primary" style="width: auto; padding: 12px 24px; margin: 0;">+ Add Expense</button>
                     </form>
                 </div>
@@ -246,7 +246,7 @@
                             <span id="salary-current-status" class="status-badge salary-status-pending">Pending</span>
                         </div>
                         <p id="salary-current-month-label" class="salary-month-label">Current month</p>
-                        <strong id="salary-current-amount" class="salary-card-amount">$0</strong>
+                        <strong id="salary-current-amount" class="salary-card-amount">ج.م 0</strong>
                         <p id="salary-current-hint" class="salary-card-hint">Set the amount, then confirm when it reaches you.</p>
                         <button type="button" id="btn-confirm-current-salary" class="btn btn-primary salary-card-button">Confirm salary received</button>
                     </article>
@@ -257,7 +257,7 @@
                             <span id="salary-next-status" class="status-badge salary-status-pending">Pending</span>
                         </div>
                         <p id="salary-next-month-label" class="salary-month-label">Next month</p>
-                        <strong id="salary-next-amount" class="salary-card-amount">$0</strong>
+                        <strong id="salary-next-amount" class="salary-card-amount">ج.م 0</strong>
                         <p id="salary-next-hint" class="salary-card-hint">It will be created automatically after you confirm this month.</p>
                         <button type="button" id="btn-edit-next-salary" class="btn btn-secondary salary-card-button">Plan next month's salary</button>
                     </article>
@@ -357,19 +357,19 @@
                 <div class="movement-summary-grid">
                     <div class="summary-card summary-receivable">
                         <span>Customer payments pending</span>
-                        <strong id="movement-summary-customer">$0</strong>
+                        <strong id="movement-summary-customer">ج.م 0</strong>
                     </div>
                     <div class="summary-card summary-held">
                         <span>Held customer funds</span>
-                        <strong id="movement-summary-held">$0</strong>
+                        <strong id="movement-summary-held">ج.م 0</strong>
                     </div>
                     <div class="summary-card summary-loan">
                         <span>Loans outstanding</span>
-                        <strong id="movement-summary-loans">$0</strong>
+                        <strong id="movement-summary-loans">ج.م 0</strong>
                     </div>
                     <div class="summary-card summary-obligation">
                         <span>My obligations</span>
-                        <strong id="movement-summary-obligations">$0</strong>
+                        <strong id="movement-summary-obligations">ج.م 0</strong>
                     </div>
                 </div>
 
@@ -438,7 +438,7 @@
                     <input type="text" id="client-name" placeholder="Client Name" required>
                 </div>
                 <div class="form-group">
-                    <input type="number" step="0.01" id="client-budget" placeholder="Total Budget ($)" required>
+                    <input type="number" step="0.01" id="client-budget" placeholder="Total Budget (ج.م)" required>
                 </div>
                 <div class="form-group" style="display: flex; gap: 10px; align-items: center; margin-top: 10px;">
                     <input type="checkbox" id="client-is-collected" style="width: auto;" checked>
@@ -460,7 +460,7 @@
                     <option value="">Select Client...</option>
                 </select>
                 <input type="text" id="task-title" placeholder="Task Title" required>
-                <input type="number" id="task-cost" placeholder="Task Cost ($)" required>
+                <input type="number" id="task-cost" placeholder="Task Cost (ج.م)" required>
                 <div class="modal-actions">
                     <button type="submit" class="btn btn-primary">Save Task</button>
                     <button type="button" class="btn btn-secondary close-modal">Cancel</button>
@@ -525,6 +525,13 @@
                         <input type="number" step="0.01" min="0.01" id="movement-amount" placeholder="0.00" required>
                     </div>
                     <div class="form-group">
+                        <label for="movement-currency">Currency</label>
+                        <select id="movement-currency">
+                            <option value="EGP">جنيه مصري (EGP)</option>
+                            <option value="USD">دولار أمريكي (USD)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label for="movement-date">Due date (optional)</label>
                         <input type="date" id="movement-date">
                     </div>
@@ -532,6 +539,20 @@
                         <label for="movement-settled-amount">Settled so far</label>
                         <input type="number" step="0.01" min="0" id="movement-settled-amount" placeholder="0.00" value="0">
                     </div>
+                </div>
+                <div id="movement-fx-fields" class="fx-fields hidden">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="movement-transfer-fee">Transfer fee (USD)</label>
+                            <input type="number" step="0.01" min="0" id="movement-transfer-fee" placeholder="0.00" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="movement-exchange-rate">USD → EGP rate</label>
+                            <input type="number" step="0.0001" min="0" id="movement-exchange-rate" placeholder="Fetching live rate…" readonly>
+                        </div>
+                    </div>
+                    <div id="movement-fx-preview" class="fx-preview">Choose USD to fetch the current rate.</div>
+                    <small id="movement-rate-meta" class="field-help"></small>
                 </div>
                 <div class="form-group">
                     <label for="movement-type">Movement type</label>
@@ -567,6 +588,8 @@
             </form>
         </div>
     </div>
+
+    <div class="fx-attribution"><a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer">Rates By Exchange Rate API</a></div>
 
     <!-- External Libraries & Application Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>

@@ -151,7 +151,7 @@ async function setAvailableBalance(targetAmount) {
     const currentAvailable =
         totalIncome - (totalFixedExpenses + currentDailyTotal);
 
-    const adjustmentAmount = currentAvailable - target;
+const adjustmentAmount = target;
 
     if (adjustmentAmount === 0) return;
 

@@ -573,3 +573,240 @@ tr:last-child td {
     .section-actions .btn { flex: 1; }
     .movements-table { min-width: 760px; }
 }
+
+
+/* ==========================================
+   Wallet Refresh: Auth, Salary & Mobile UX
+   ========================================== */
+:root {
+    --bg-deep: #08111f;
+    --bg-elevated: #111f33;
+    --bg-soft: rgba(255, 255, 255, 0.045);
+    --accent-soft: rgba(16, 185, 129, 0.12);
+    --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.2);
+}
+
+body {
+    background: radial-gradient(circle at top right, rgba(16, 185, 129, 0.08), transparent 34%), var(--bg-primary);
+    overflow-x: hidden;
+}
+
+button, input, select, textarea {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+}
+
+.auth-wrapper {
+    min-height: 100svh;
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(320px, 420px);
+    gap: clamp(24px, 6vw, 92px);
+    align-content: center;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: clamp(24px, 6vw, 64px);
+}
+
+.auth-brand-block {
+    align-self: center;
+    max-width: 460px;
+}
+
+.brand-mark {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 18px;
+    background: var(--accent-soft);
+    font-size: 26px;
+}
+
+.auth-eyebrow, .auth-kicker, .section-kicker {
+    display: block;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.auth-brand-block h1 {
+    margin: 12px 0;
+    font-size: clamp(32px, 5vw, 54px);
+    line-height: 1.05;
+    letter-spacing: -0.045em;
+}
+
+.auth-brand-block p {
+    max-width: 400px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    font-size: 16px;
+}
+
+.auth-panel {
+    max-width: none;
+    padding: clamp(22px, 4vw, 34px);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 20px;
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.96), rgba(17, 31, 51, 0.96));
+    box-shadow: var(--shadow-soft);
+}
+
+.auth-panel-heading {
+    margin-bottom: 26px;
+}
+
+.auth-panel-heading h2 {
+    margin: 8px 0;
+    text-align: left;
+    font-size: 26px;
+    letter-spacing: -0.03em;
+}
+
+.auth-panel-heading p {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.auth-submit {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 4px;
+}
+
+.auth-switch {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 22px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.text-button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.text-button:hover { color: #6ee7b7; }
+.auth-message { min-height: 20px; margin-top: 12px; text-align: center; font-size: 13px; }
+.message-error { color: #f87171 !important; }
+.message-success { color: #34d399 !important; }
+
+.section-kicker { margin-bottom: 7px; }
+.salary-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.salary-card, .salary-form-card, .salary-history-card {
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    background: var(--bg-secondary);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.salary-card {
+    min-height: 225px;
+    padding: 22px;
+}
+
+.salary-card-current { border-color: rgba(16, 185, 129, 0.32); background: linear-gradient(145deg, rgba(16, 185, 129, 0.12), var(--bg-secondary)); }
+.salary-card-next { border-color: rgba(56, 189, 248, 0.25); background: linear-gradient(145deg, rgba(56, 189, 248, 0.08), var(--bg-secondary)); }
+.salary-card-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.salary-card-label { color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.salary-month-label { margin-top: 18px; color: var(--text-secondary); font-size: 13px; }
+.salary-card-amount { display: block; margin: 6px 0 8px; font-size: clamp(28px, 4vw, 38px); letter-spacing: -0.04em; }
+.salary-card-hint { min-height: 42px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.salary-card-button { width: 100%; margin-top: 14px; }
+.salary-status-pending { color: #fbbf24; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); }
+.salary-status-received { color: #34d399; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); }
+.salary-form-card, .salary-history-card { margin-top: 16px; padding: 22px; }
+.salary-form-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.salary-form-heading h3, .compact-header h3 { font-size: 17px; }
+.salary-form-heading p { margin-top: 6px; color: var(--text-secondary); font-size: 13px; }
+.salary-rule-note { color: var(--text-secondary); font-size: 12px; line-height: 1.5; text-align: right; }
+.salary-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.salary-form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.salary-form-actions .btn { flex: 1; min-width: 180px; }
+.form-success-message { min-height: 20px; margin-top: 12px; font-size: 13px; }
+.salary-history-card .section-header { margin-bottom: 12px; }
+.compact-header { margin-bottom: 12px; }
+
+.expense-kind { display: block; margin-top: 4px; color: var(--text-secondary); font-size: 11px; line-height: 1.4; }
+.recurring-expense-row { background: rgba(16, 185, 129, 0.025); }
+.expense-status-paid { display: inline-block; margin-bottom: 5px; color: #34d399; background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.25); }
+.expense-status-pending { display: inline-block; margin-bottom: 5px; color: #fbbf24; background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.25); }
+.toggle-field { display: flex; align-items: flex-start; gap: 12px; margin-top: 6px; padding: 13px 14px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(255, 255, 255, 0.025); cursor: pointer; }
+.toggle-field input { width: auto; margin-top: 3px; accent-color: var(--accent); }
+.toggle-field strong, .toggle-field small { display: block; }
+.toggle-field small { margin-top: 4px; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+
+@media (max-width: 900px) {
+    .auth-wrapper { grid-template-columns: 1fr; max-width: 520px; gap: 24px; }
+    .auth-brand-block { text-align: center; }
+    .auth-brand-block p { margin: 0 auto; }
+    .brand-mark { margin: 0 auto 16px; }
+    .salary-overview-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+    body { font-size: 14px; }
+    .sidebar { position: sticky; top: 0; z-index: 20; padding: 12px; }
+    .brand { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 18px; }
+    .nav-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .nav-item { min-height: 44px; padding: 10px 9px; text-align: center; font-size: 12px; }
+    .nav-item.active { border-left: 0; border-bottom: 3px solid var(--accent); }
+    .btn-logout { width: 100%; margin-top: 12px; min-height: 42px; }
+    .main-content { min-width: 0; padding: 18px 12px 32px; }
+    .section-header { gap: 14px; margin-bottom: 18px; }
+    .section-header > div { min-width: 0; }
+    .section-header .btn, .section-actions .btn { width: 100% !important; }
+    .section-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+    .section-actions .btn:last-child { grid-column: 1 / -1; }
+    .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .stat-card { padding: 13px 11px; border-radius: 11px; }
+    .stat-card h3 { min-height: 30px; font-size: 11px; line-height: 1.35; }
+    .stat-card p { font-size: 19px; overflow-wrap: anywhere; }
+    .auth-card { padding: 22px 18px; }
+    .auth-wrapper { padding: 24px 16px; }
+    .auth-brand-block h1 { font-size: 34px; }
+    .salary-card, .salary-form-card, .salary-history-card { padding: 16px; }
+    .salary-form-grid { grid-template-columns: 1fr; gap: 0; }
+    .salary-form-actions { flex-direction: column; }
+    .salary-form-actions .btn { width: 100%; min-width: 0; }
+    .salary-form-heading { flex-direction: column; gap: 8px; }
+    .salary-rule-note { text-align: left; }
+    .filter-bar { gap: 8px; }
+    .table-container { border-radius: 10px; -webkit-overflow-scrolling: touch; }
+    table { min-width: 680px; }
+    .movements-table { min-width: 760px; }
+    .modal { align-items: flex-end; }
+    .modal-content { max-height: 92svh; overflow-y: auto; padding: 20px 16px; border-radius: 18px 18px 0 0; }
+    .expense-form-row { grid-template-columns: 1fr; gap: 0; }
+    .modal-actions { flex-direction: column; }
+    .modal-actions .btn { width: 100%; margin: 0; }
+    #form-adjust-available, #form-daily-expense { gap: 8px; }
+}
+
+@media (max-width: 390px) {
+    .stats-grid { grid-template-columns: 1fr; }
+    .nav-menu { grid-template-columns: 1fr 1fr; }
+    .auth-brand-block h1 { font-size: 30px; }
+}

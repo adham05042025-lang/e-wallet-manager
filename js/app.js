@@ -44,8 +44,11 @@ async function loadDashboardData() {
         .eq('month_year', currentMonth)
         .eq('is_paid', true);
 
+    const paidRecurringExpenses = typeof recurringPaidExpensesTotal === 'function'
+        ? recurringPaidExpensesTotal(currentMonth)
+        : 0;
     const totalFixedExpenses =
-        expenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+        (expenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0) + paidRecurringExpenses;
 
     // 4. Daily Expenses Total (إجمالي المصروفات اليومية للشهر)
     const { data: dailyExpenses } = await supabaseClient
@@ -386,94 +389,368 @@ async function deleteTask(id) {
     }
 }
 
-// 6. Fixed Salary Module
-async function loadSalaryForm() {
-    const currentMonth = getCurrentMonthYear();
-    const monthInput = document.getElementById('salary-month');
-    if (!monthInput) return;
-
-    monthInput.value = currentMonth;
-
-    const { data: salary } = await supabaseClient
-        .from('salaries')
-        .select('*')
-        .eq('month_year', currentMonth)
-        .maybeSingle();
-
-    if (salary) {
-        document.getElementById('salary-amount').value = salary.amount;
-        document.getElementById('salary-received').checked = salary.is_received;
-    } else {
-        document.getElementById('salary-amount').value = '';
-        document.getElementById('salary-received').checked = false;
-    }
+// 6. Salary Center Module
+function shiftMonth(monthYear, offset) {
+    const [year, month] = monthYear.split('-').map(Number);
+    const date = new Date(year, month - 1 + offset, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-document.getElementById('salary-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const monthYear = document.getElementById('salary-month').value;
-    const amount = Number(document.getElementById('salary-amount').value);
-    const isReceived = document.getElementById('salary-received').checked;
+function formatMonthLabel(monthYear) {
+    if (!monthYear) return '—';
+    const [year, month] = monthYear.split('-').map(Number);
+    return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
 
+async function getSalaryRecord(monthYear) {
+    const { data, error } = await supabaseClient
+        .from('salaries')
+        .select('*')
+        .eq('month_year', monthYear)
+        .maybeSingle();
+    if (error) console.error('Could not load salary:', error);
+    return data || null;
+}
+
+async function upsertSalary(monthYear, amount, isReceived, createNextPending = false) {
     const { data: existing } = await supabaseClient
         .from('salaries')
         .select('id')
         .eq('month_year', monthYear)
         .maybeSingle();
 
+    let error;
     if (existing) {
-        await supabaseClient.from('salaries').update({ amount, is_received: isReceived }).eq('id', existing.id);
+        ({ error } = await supabaseClient
+            .from('salaries')
+            .update({ amount, is_received: isReceived })
+            .eq('id', existing.id));
     } else {
-        await supabaseClient.from('salaries').insert([{ month_year: monthYear, amount, is_received: isReceived }]);
+        ({ error } = await supabaseClient
+            .from('salaries')
+            .insert([{ month_year: monthYear, amount, is_received: isReceived }]));
     }
 
-    alert('Salary settings updated successfully!');
-    loadDashboardData();
-});
+    if (error) {
+        console.error('Could not save salary:', error);
+        return false;
+    }
 
-// 7. Fixed Expenses Module
-async function loadExpenses() {
-    const currentMonth = getCurrentMonthYear();
-    const { data: expenses } = await supabaseClient.from('expenses').select('*').eq('month_year', currentMonth).order('id', { ascending: false });
+    if (createNextPending && isReceived) {
+        const nextMonth = shiftMonth(monthYear, 1);
+        const nextSalary = await getSalaryRecord(nextMonth);
+        if (!nextSalary) {
+            const { error: nextError } = await supabaseClient
+                .from('salaries')
+                .insert([{ month_year: nextMonth, amount, is_received: false }]);
+            if (nextError) console.error('Could not create next pending salary:', nextError);
+        }
+    }
+    return true;
+}
 
-    const tbody = document.getElementById('expenses-table-body');
+function setSalaryMessage(message, isError = false) {
+    const element = document.getElementById('salary-form-message');
+    if (!element) return;
+    element.textContent = message;
+    element.classList.toggle('message-error', isError);
+    element.classList.toggle('message-success', !isError && Boolean(message));
+}
+
+function paintSalaryCard(prefix, monthYear, salary) {
+    const status = salary?.is_received ? 'received' : 'pending';
+    const statusLabel = salary?.is_received ? 'Received' : 'Pending';
+    const amount = Number(salary?.amount || 0);
+    const statusElement = document.getElementById(`salary-${prefix}-status`);
+    const monthElement = document.getElementById(`salary-${prefix}-month-label`);
+    const amountElement = document.getElementById(`salary-${prefix}-amount`);
+    const hintElement = document.getElementById(`salary-${prefix}-hint`);
+
+    if (statusElement) {
+        statusElement.textContent = statusLabel;
+        statusElement.className = `status-badge salary-status-${status}`;
+    }
+    if (monthElement) monthElement.textContent = formatMonthLabel(monthYear);
+    if (amountElement) amountElement.textContent = formatMoney(amount);
+    if (hintElement) {
+        hintElement.textContent = salary?.is_received
+            ? 'This amount is included in this month’s available cash.'
+            : salary
+                ? 'Planned salary. Confirm it when the money reaches you.'
+                : 'No salary plan yet. Add an amount below to create a pending salary.';
+    }
+
+    const actionButton = document.getElementById(prefix === 'current' ? 'btn-confirm-current-salary' : 'btn-edit-next-salary');
+    if (actionButton && prefix === 'current') {
+        actionButton.disabled = Boolean(salary?.is_received);
+        actionButton.textContent = salary?.is_received ? 'Salary received' : 'Confirm salary received';
+    }
+    return { amount, status };
+}
+
+function renderSalaryHistory(salaries) {
+    const tbody = document.getElementById('salary-history-body');
     if (!tbody) return;
     tbody.innerHTML = '';
-
-    expenses?.forEach(exp => {
+    if (!salaries?.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No salary plans yet.</td></tr>';
+        return;
+    }
+    salaries.forEach(salary => {
+        const status = salary.is_received ? 'received' : 'pending';
         tbody.innerHTML += `
             <tr>
-                <td>${exp.title}</td>
-                <td>$${Number(exp.amount).toLocaleString()}</td>
-                <td>${exp.due_date || '-'}</td>
-                <td>
-                    <input type="checkbox" ${exp.is_paid ? 'checked' : ''} onchange="toggleExpensePaid(${exp.id}, this.checked)">
-                    <span style="color: ${exp.is_paid ? 'var(--accent)' : 'var(--danger)'}">${exp.is_paid ? 'Paid' : 'Unpaid'}</span>
-                </td>
-                <td>
-                    <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px; width: auto;" onclick="deleteExpense(${exp.id})">Delete</button>
-                </td>
+                <td>${escapeHTML(formatMonthLabel(salary.month_year))}</td>
+                <td><strong>${formatMoney(salary.amount)}</strong></td>
+                <td><span class="status-badge salary-status-${status}">${salary.is_received ? 'Received' : 'Pending'}</span></td>
+                <td><button class="btn btn-secondary btn-sm" onclick="editSalaryMonth('${escapeHTML(salary.month_year)}')">Edit</button></td>
             </tr>
         `;
     });
 }
 
-document.getElementById('form-expense')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const title = document.getElementById('expense-title').value;
+async function loadSalaryForm(selectedMonth = getCurrentMonthYear()) {
+    const nextMonth = shiftMonth(getCurrentMonthYear(), 1);
+    const monthInput = document.getElementById('salary-month');
+    if (!monthInput) return;
+    monthInput.value = selectedMonth;
+
+    const [{ data: salaries }, currentSalary, nextSalary] = await Promise.all([
+        supabaseClient.from('salaries').select('*').order('month_year', { ascending: false }),
+        getSalaryRecord(getCurrentMonthYear()),
+        getSalaryRecord(nextMonth)
+    ]);
+
+    paintSalaryCard('current', getCurrentMonthYear(), currentSalary);
+    paintSalaryCard('next', nextMonth, nextSalary);
+    renderSalaryHistory(salaries || []);
+
+    const selectedSalary = await getSalaryRecord(selectedMonth);
+    document.getElementById('salary-amount').value = selectedSalary?.amount || '';
+    setSalaryMessage('');
+}
+
+async function saveSalaryFromForm(isReceived) {
+    const monthYear = document.getElementById('salary-month')?.value;
+    const amount = Number(document.getElementById('salary-amount')?.value);
+    if (!monthYear || !Number.isFinite(amount) || amount <= 0) {
+        setSalaryMessage('Enter a valid salary amount first.', true);
+        return;
+    }
+    const saved = await upsertSalary(monthYear, amount, isReceived, isReceived && monthYear === getCurrentMonthYear());
+    if (!saved) {
+        setSalaryMessage('Could not save salary. Please try again.', true);
+        return;
+    }
+    setSalaryMessage(isReceived
+        ? `Salary for ${formatMonthLabel(monthYear)} confirmed. Next month is now pending.`
+        : `Salary for ${formatMonthLabel(monthYear)} saved as pending.`);
+    await loadSalaryForm(monthYear);
+    loadDashboardData();
+}
+
+document.getElementById('salary-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await saveSalaryFromForm(false);
+});
+document.getElementById('btn-confirm-salary')?.addEventListener('click', () => saveSalaryFromForm(true));
+document.getElementById('btn-confirm-current-salary')?.addEventListener('click', async () => {
+    const currentMonth = getCurrentMonthYear();
+    const currentSalary = await getSalaryRecord(currentMonth);
+    if (!currentSalary?.amount) {
+        document.getElementById('salary-month').value = currentMonth;
+        setSalaryMessage('Set this month’s salary amount first, then confirm it here.', true);
+        document.getElementById('salary-amount').focus();
+        return;
+    }
+    document.getElementById('salary-month').value = currentMonth;
+    document.getElementById('salary-amount').value = currentSalary.amount;
+    await saveSalaryFromForm(true);
+});
+document.getElementById('btn-edit-next-salary')?.addEventListener('click', async () => {
+    const nextMonth = shiftMonth(getCurrentMonthYear(), 1);
+    const nextSalary = await getSalaryRecord(nextMonth);
+    document.getElementById('salary-month').value = nextMonth;
+    document.getElementById('salary-amount').value = nextSalary?.amount || '';
+    document.getElementById('salary-amount').focus();
+    setSalaryMessage(`Planning salary for ${formatMonthLabel(nextMonth)}.`);
+});
+document.getElementById('salary-month')?.addEventListener('change', async (event) => {
+    const salary = await getSalaryRecord(event.target.value);
+    document.getElementById('salary-amount').value = salary?.amount || '';
+    setSalaryMessage(salary ? `${salary.is_received ? 'Received' : 'Pending'} salary plan loaded.` : 'No plan for this month yet.');
+});
+
+async function editSalaryMonth(monthYear) {
+    document.getElementById('salary-month').value = monthYear;
+    const salary = await getSalaryRecord(monthYear);
+    document.getElementById('salary-amount').value = salary?.amount || '';
+    setSalaryMessage(`Editing salary for ${formatMonthLabel(monthYear)}.`);
+    document.getElementById('salary-amount').focus();
+}
+window.editSalaryMonth = editSalaryMonth;
+
+// 7. Monthly Obligations Module
+function recurringExpenseStorageKey() {
+    return `ewallet_recurring_obligations_${movementUserKey || 'local'}`;
+}
+
+function readRecurringExpenses() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(recurringExpenseStorageKey()) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        console.error('Could not read recurring obligations:', error);
+        return [];
+    }
+}
+
+function writeRecurringExpenses(expenses) {
+    localStorage.setItem(recurringExpenseStorageKey(), JSON.stringify(expenses));
+}
+
+function monthFromDate(dateValue) {
+    return String(dateValue || '').slice(0, 7);
+}
+
+function isRecurringExpenseActive(expense, monthYear) {
+    const startMonth = monthFromDate(expense.startDate);
+    const endMonth = monthFromDate(expense.endDate);
+    return Boolean(startMonth && endMonth && monthYear >= startMonth && monthYear <= endMonth);
+}
+
+function recurringExpenseDueDate(expense, monthYear) {
+    const day = Number(expense.dueDay || String(expense.startDate || '').slice(8, 10) || 1);
+    const [year, month] = monthYear.split('-').map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${monthYear}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+}
+
+function recurringPaidExpensesTotal(monthYear) {
+    return readRecurringExpenses()
+        .filter(expense => isRecurringExpenseActive(expense, monthYear) && expense.paidMonths?.includes(monthYear))
+        .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+}
+
+function recurringObligationsForMonth(monthYear) {
+    return readRecurringExpenses().filter(expense => isRecurringExpenseActive(expense, monthYear));
+}
+
+async function loadExpenses() {
+    const currentMonth = getCurrentMonthYear();
+    const { data: expenses } = await supabaseClient
+        .from('expenses')
+        .select('*')
+        .eq('month_year', currentMonth)
+        .order('id', { ascending: false });
+    const tbody = document.getElementById('expenses-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const legacyExpenses = expenses || [];
+    const recurringExpenses = recurringObligationsForMonth(currentMonth);
+    if (!legacyExpenses.length && !recurringExpenses.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No obligations for this month. Add one to start your plan.</td></tr>';
+        return;
+    }
+
+    legacyExpenses.forEach(expense => {
+        const paid = Boolean(expense.is_paid);
+        tbody.innerHTML += `
+            <tr>
+                <td><strong>${escapeHTML(expense.title)}</strong><small class="expense-kind">One-time expense</small></td>
+                <td><strong>${formatMoney(expense.amount)}</strong></td>
+                <td>${escapeHTML(expense.due_date || '—')}</td>
+                <td>
+                    <span class="status-badge expense-status-${paid ? 'paid' : 'pending'}">${paid ? 'Paid' : 'Pending'}</span>
+                    <button class="btn btn-secondary btn-sm" onclick="toggleExpensePaid(${expense.id}, ${!paid})">${paid ? 'Undo' : 'Confirm Paid'}</button>
+                </td>
+                <td><button class="btn btn-danger btn-sm" onclick="deleteExpense(${expense.id})">Delete</button></td>
+            </tr>
+        `;
+    });
+
+    recurringExpenses.forEach(expense => {
+        const paid = expense.paidMonths?.includes(currentMonth);
+        const dueDate = recurringExpenseDueDate(expense, currentMonth);
+        tbody.innerHTML += `
+            <tr class="recurring-expense-row">
+                <td>
+                    <strong>${escapeHTML(expense.title)}</strong>
+                    <small class="expense-kind">Monthly · ${escapeHTML(expense.startDate)} → ${escapeHTML(expense.endDate)}</small>
+                </td>
+                <td><strong>${formatMoney(expense.amount)}</strong><small class="expense-kind">Auto-added monthly</small></td>
+                <td>${escapeHTML(dueDate)}</td>
+                <td>
+                    <span class="status-badge expense-status-${paid ? 'paid' : 'pending'}">${paid ? 'Paid' : 'Pending'}</span>
+                    <button class="btn btn-secondary btn-sm" onclick="toggleRecurringExpensePaid('${escapeHTML(expense.id)}', '${currentMonth}', ${!paid})">${paid ? 'Undo' : 'Confirm Paid'}</button>
+                </td>
+                <td><button class="btn btn-danger btn-sm" onclick="deleteRecurringExpense('${escapeHTML(expense.id)}')">Delete plan</button></td>
+            </tr>
+        `;
+    });
+}
+
+function syncExpenseRecurrenceFields() {
+    const recurring = document.getElementById('expense-recurring')?.checked;
+    const endDate = document.getElementById('expense-end-date');
+    const help = document.getElementById('expense-recurring-help');
+    if (!endDate) return;
+    endDate.required = Boolean(recurring);
+    endDate.disabled = !recurring;
+    if (!recurring) endDate.value = '';
+    if (help) help.textContent = recurring
+        ? 'This obligation will appear automatically in every active month.'
+        : 'It will be saved only for the current month.';
+}
+
+document.getElementById('expense-recurring')?.addEventListener('change', syncExpenseRecurrenceFields);
+document.getElementById('open-add-expense-modal')?.addEventListener('click', () => {
+    const startDate = document.getElementById('expense-start-date');
+    if (startDate && !startDate.value) startDate.value = new Date().toISOString().slice(0, 10);
+    syncExpenseRecurrenceFields();
+});
+
+document.getElementById('form-expense')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const title = document.getElementById('expense-title').value.trim();
     const amount = Number(document.getElementById('expense-amount').value);
-    const dueDate = document.getElementById('expense-date').value;
+    const startDate = document.getElementById('expense-start-date').value;
+    const endDate = document.getElementById('expense-end-date').value;
+    const isRecurring = document.getElementById('expense-recurring').checked;
     const currentMonth = getCurrentMonthYear();
 
-    await supabaseClient.from('expenses').insert([{
-        title,
-        amount,
-        due_date: dueDate,
-        is_paid: false,
-        month_year: currentMonth
-    }]);
+    if (!title || !Number.isFinite(amount) || amount <= 0 || !startDate || (isRecurring && (!endDate || endDate < startDate))) {
+        alert(isRecurring ? 'Please complete the name, amount, and a valid start/end date.' : 'Please complete the name, amount, and start date.');
+        return;
+    }
+
+    if (isRecurring) {
+        const recurringExpenses = readRecurringExpenses();
+        recurringExpenses.push({
+            id: `obligation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            title,
+            amount,
+            startDate,
+            endDate,
+            dueDay: Number(startDate.slice(8, 10)),
+            paidMonths: [],
+            createdAt: new Date().toISOString()
+        });
+        writeRecurringExpenses(recurringExpenses);
+    } else {
+        await supabaseClient.from('expenses').insert([{
+            title,
+            amount,
+            due_date: startDate,
+            is_paid: false,
+            month_year: currentMonth
+        }]);
+    }
 
     document.getElementById('form-expense').reset();
+    document.getElementById('expense-recurring').checked = true;
+    syncExpenseRecurrenceFields();
     if (typeof closeModal === 'function') closeModal('modal-expense');
     loadDashboardData();
 });
@@ -483,37 +760,35 @@ async function toggleExpensePaid(id, isPaid) {
     loadDashboardData();
 }
 
+async function toggleRecurringExpensePaid(id, monthYear, isPaid) {
+    const expenses = readRecurringExpenses();
+    const expense = expenses.find(item => item.id === id);
+    if (!expense) return;
+    const paidMonths = new Set(expense.paidMonths || []);
+    if (isPaid) paidMonths.add(monthYear);
+    else paidMonths.delete(monthYear);
+    expense.paidMonths = [...paidMonths].sort();
+    writeRecurringExpenses(expenses);
+    loadDashboardData();
+}
+
 async function deleteExpense(id) {
-    if (confirm('Delete expense?')) {
+    if (confirm('Delete this expense?')) {
         await supabaseClient.from('expenses').delete().eq('id', id);
         loadDashboardData();
     }
 }
 
-document.getElementById('btn-copy-expenses')?.addEventListener('click', async () => {
-    const currentMonth = getCurrentMonthYear();
-    
-    const d = new Date();
-    d.setMonth(d.getMonth() + 1);
-    const nextMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+async function deleteRecurringExpense(id) {
+    if (!confirm('Delete this recurring obligation and its future months?')) return;
+    writeRecurringExpenses(readRecurringExpenses().filter(expense => expense.id !== id));
+    loadDashboardData();
+}
 
-    const { data: currentExpenses } = await supabaseClient.from('expenses').select('*').eq('month_year', currentMonth);
-
-    if (!currentExpenses || currentExpenses.length === 0) {
-        return alert('No expenses found for the current month to copy.');
-    }
-
-    const newExpenses = currentExpenses.map(exp => ({
-        title: exp.title,
-        amount: exp.amount,
-        due_date: exp.due_date,
-        is_paid: false,
-        month_year: nextMonth
-    }));
-
-    const { error } = await supabaseClient.from('expenses').insert(newExpenses);
-    if (!error) alert(`Expenses successfully copied to ${nextMonth}!`);
-});
+window.toggleExpensePaid = toggleExpensePaid;
+window.toggleRecurringExpensePaid = toggleRecurringExpensePaid;
+window.deleteExpense = deleteExpense;
+window.deleteRecurringExpense = deleteRecurringExpense;
 
 // 8. Monthly Reporting Engine & Exporting
 async function generateReport() {
@@ -529,7 +804,9 @@ async function generateReport() {
     const { data: balanceAdjustments } = await supabaseClient.from('balance_adjustments').select('amount').eq('month_year', month).order('created_at', { ascending: false }).limit(1);
 
     const totalSalary = salary?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
-    const totalExpenses = expenses?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
+    const totalExpenses =
+        (expenses?.reduce((sum, i) => sum + Number(i.amount), 0) || 0) +
+        (typeof recurringPaidExpensesTotal === 'function' ? recurringPaidExpensesTotal(month) : 0);
     const totalDaily = daily?.reduce((sum, i) => sum + Number(i.amount), 0) || 0;
     
     const totalClients = clients?.reduce((sum, i) => {

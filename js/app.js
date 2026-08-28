@@ -7,7 +7,6 @@ const getCurrentMonthYear = () => {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     return `${d.getFullYear()}-${month}`;
 };
-
 // 1. Dashboard & Calculations Engine
 async function loadDashboardData() {
     const currentMonth = getCurrentMonthYear();
@@ -19,11 +18,17 @@ async function loadDashboardData() {
         .select('amount')
         .eq('month_year', currentMonth)
         .eq('is_received', true);
-    const salaryIncome = salaries?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+    const salaryIncome =
+        salaries?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
     // Clients Revenue
-    const { data: clients } = await supabaseClient.from('clients').select('total_budget');
-    const clientsIncome = clients?.reduce((sum, item) => sum + Number(item.total_budget), 0) || 0;
+    const { data: clients } = await supabaseClient
+        .from('clients')
+        .select('total_budget');
+
+    const clientsIncome =
+        clients?.reduce((sum, item) => sum + Number(item.total_budget), 0) || 0;
 
     // Paid Fixed Expenses
     const { data: expenses } = await supabaseClient
@@ -31,7 +36,9 @@ async function loadDashboardData() {
         .select('amount')
         .eq('month_year', currentMonth)
         .eq('is_paid', true);
-    const totalFixedExpenses = expenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+    const totalFixedExpenses =
+        expenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
     // Daily Expenses Total
     const { data: dailyExpenses } = await supabaseClient
@@ -39,17 +46,43 @@ async function loadDashboardData() {
         .select('*')
         .gte('created_at', `${currentMonth}-01`);
 
-    const totalDailyExpenses = dailyExpenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+    const totalDailyExpenses =
+        dailyExpenses?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+    // Manual Balance Adjustment
+    const { data: balanceAdjustments } = await supabaseClient
+        .from('balance_adjustments')
+        .select('amount')
+        .eq('month_year', currentMonth)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+    const balanceAdjustment =
+        balanceAdjustments?.[0]
+            ? Number(balanceAdjustments[0].amount)
+            : 0;
 
     // Final Calculation Formula
-    const availableToSpend = (salaryIncome + clientsIncome) - (totalFixedExpenses + totalDailyExpenses);
+    const availableToSpend =
+        (salaryIncome + clientsIncome) -
+        (totalFixedExpenses + totalDailyExpenses) +
+        balanceAdjustment;
 
     // Update Dashboard UI Cards
-    document.getElementById('dash-salary').textContent = `$${salaryIncome.toLocaleString()}`;
-    document.getElementById('dash-clients-income').textContent = `$${clientsIncome.toLocaleString()}`;
-    document.getElementById('dash-expenses').textContent = `$${totalFixedExpenses.toLocaleString()}`;
-    document.getElementById('dash-daily-expenses').textContent = `$${totalDailyExpenses.toLocaleString()}`;
-    document.getElementById('dash-available').textContent = `$${availableToSpend.toLocaleString()}`;
+    document.getElementById('dash-salary').textContent =
+        `$${salaryIncome.toLocaleString()}`;
+
+    document.getElementById('dash-clients-income').textContent =
+        `$${clientsIncome.toLocaleString()}`;
+
+    document.getElementById('dash-expenses').textContent =
+        `$${totalFixedExpenses.toLocaleString()}`;
+
+    document.getElementById('dash-daily-expenses').textContent =
+        `$${totalDailyExpenses.toLocaleString()}`;
+
+    document.getElementById('dash-available').textContent =
+        `$${availableToSpend.toLocaleString()}`;
 
     // Load Tabular Views
     loadDailyExpenses();
@@ -58,7 +91,6 @@ async function loadDashboardData() {
     loadExpenses();
     loadSalaryForm();
 }
-
 function refreshSectionData(sectionId) {
     if (sectionId === 'sec-dashboard') loadDashboardData();
     if (sectionId === 'sec-clients') loadClients();

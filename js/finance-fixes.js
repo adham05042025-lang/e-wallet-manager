@@ -332,6 +332,22 @@
         if (typeof loadDashboardData === 'function') await loadDashboardData();
     }
 
+    async function getBaseAvailableForAdjustment() {
+        const m = month();
+        const [{ data: salaries }, clientCash, legacyCash, { data: expenses }, { data: daily }] = await Promise.all([
+            supabaseClient.from('salaries').select('amount').eq('month_year', m).eq('is_received', true),
+            currentMonthClientCash(),
+            legacyClientCashFallback(),
+            supabaseClient.from('expenses').select('amount').eq('month_year', m).eq('is_paid', true),
+            supabaseClient.from('daily_expenses').select('amount').gte('created_at', `${m}-01`).lt('created_at', `${m}-32`)
+        ]);
+        const salary = (salaries || []).reduce((s, x) => s + Number(x.amount || 0), 0);
+        const fixed = (expenses || []).reduce((s, x) => s + Number(x.amount || 0), 0) + (typeof recurringPaidExpensesTotal === 'function' ? recurringPaidExpensesTotal(m) : 0);
+        const dailyTotal = (daily || []).reduce((s, x) => s + Number(x.amount || 0), 0);
+        const movements = typeof getMovementSummary === 'function' ? getMovementSummary() : { cashImpact: 0 };
+        return salary + clientCash + legacyCash + Number(movements.cashImpact || 0) - fixed - dailyTotal;
+    }
+
     async function dashboardFix() {
         const m = month();
         const [{ data: salaries }, clientCash, legacyCash, { data: expenses }, { data: daily }, { data: adjustments }] = await Promise.all([
@@ -377,12 +393,14 @@
         window.deleteTask = deleteTaskFix;
         window.collectClientIncome = collectFix;
         window.deleteClient = deleteClientFix;
-        window.setAvailableBalance = window.setAvailableBalance || (async value => {
-            const n = Number(value);
-            if (!Number.isFinite(n)) return;
-            const { error } = await supabaseClient.from('balance_adjustments').insert([{ amount: n, month_year: month(), created_at: new Date().toISOString() }]);
-            if (error) alert(error.message); else dashboardFix();
-        });
+        window.setAvailableBalance = async value => {
+            const target = Number(value);
+            if (!Number.isFinite(target)) return;
+            const base = await getBaseAvailableForAdjustment();
+            const adjustment = target - base;
+            const { error } = await supabaseClient.from('balance_adjustments').insert([{ amount: adjustment, month_year: month(), created_at: new Date().toISOString() }]);
+            if (error) alert(error.message); else await dashboardFix();
+        };
         const originalDashboard = window.loadDashboardData;
         if (typeof originalDashboard === 'function' && !originalDashboard.__financeFixV3) {
             const wrapped = async function () {

@@ -1,114 +1,101 @@
-// ==========================================
-// E-Wallet Core Logic & Dynamic Calculations
-// ==========================================
-
-const getCurrentMonthYear = () => {
-    const d = new Date();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    return `${d.getFullYear()}-${month}`;
-};
-
-// 1. Dashboard & Calculations Engine
-async function loadDashboardData() {
-    const currentMonth = getCurrentMonthYear();
-
-    const { data: salaries } = await supabaseClient.from('salaries').select('amount').eq('month_year', currentMonth).eq('is_received', true);
-    const salaryIncome = salaries?.reduce((sum, item) => sum + Number(item.amount || 0), 0) || 0;
-
-    const { data: clients } = await supabaseClient.from('clients').select('total_budget, remaining_budget, total_budget_egp, remaining_budget_egp, currency');
-    const clientsIncome = clients?.reduce((sum, item) => {
-        const total = Number(item.total_budget_egp ?? item.total_budget ?? 0);
-        const remaining = Number(item.remaining_budget_egp ?? item.remaining_budget ?? 0);
-        return sum + (total - remaining);
-    }, 0) || 0;
-    const clientPendingIncome = clients?.reduce((sum, item) => sum + Number(item.remaining_budget_egp ?? item.remaining_budget ?? 0), 0) || 0;
-
-    const { data: expenses } = await supabaseClient.from('expenses').select('amount').eq('month_year', currentMonth).eq('is_paid', true);
-    const paidRecurringExpenses = typeof recurringPaidExpensesTotal === 'function' ? recurringPaidExpensesTotal(currentMonth) : 0;
-    const totalFixedExpenses = (expenses?.reduce((sum, item) => sum + Number(item.amount || 0), 0) || 0) + paidRecurringExpenses;
-
-    const start = `${currentMonth}-01`;
-    const [year, month] = currentMonth.split('-').map(Number);
-    const next = new Date(year, month, 1);
-    const end = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`;
-    const { data: dailyExpenses } = await supabaseClient.from('daily_expenses').select('amount').gte('created_at', start).lt('created_at', end);
-    const totalDailyExpenses = dailyExpenses?.reduce((sum, item) => sum + Number(item.amount || 0), 0) || 0;
-
-    const { data: balanceAdjustments } = await supabaseClient.from('balance_adjustments').select('amount').eq('month_year', currentMonth).order('created_at', { ascending: false }).limit(1);
-    const balanceAdjustment = balanceAdjustments?.[0] ? Number(balanceAdjustments[0].amount || 0) : 0;
-
-    // Movement cash impact is a reporting metric. It is NOT part of the available-cash
-    // ledger, otherwise movement amounts are counted twice.
-    const availableToSpend = salaryIncome + clientsIncome + balanceAdjustment - totalFixedExpenses - totalDailyExpenses;
-
-    document.getElementById('dash-salary')?.replaceChildren(document.createTextNode(formatMoney(salaryIncome)));
-    document.getElementById('dash-clients-income')?.replaceChildren(document.createTextNode(formatMoney(clientsIncome)));
-    document.getElementById('dash-pending-income')?.replaceChildren(document.createTextNode(formatMoney(clientPendingIncome)));
-    document.getElementById('dash-expenses')?.replaceChildren(document.createTextNode(formatMoney(totalFixedExpenses)));
-    document.getElementById('dash-daily-expenses')?.replaceChildren(document.createTextNode(formatMoney(totalDailyExpenses)));
-    document.getElementById('dash-available')?.replaceChildren(document.createTextNode(formatMoney(availableToSpend)));
-
-    const movementSummary = getMovementSummary();
-    document.getElementById('dash-customer-payments-pending')?.replaceChildren(document.createTextNode(formatMoney(clientPendingIncome + movementSummary.customerPending)));
-    document.getElementById('dash-held-funds')?.replaceChildren(document.createTextNode(formatMoney(movementSummary.heldCustomerFunds)));
-    document.getElementById('dash-loans-outstanding')?.replaceChildren(document.createTextNode(formatMoney(movementSummary.loansOutstanding)));
-    document.getElementById('dash-obligations')?.replaceChildren(document.createTextNode(formatMoney(movementSummary.obligations)));
-
-    loadDailyExpenses(); loadClients(); loadTasks(); loadExpenses(); loadSalaryForm(); loadMovements();
-}
-
-function refreshSectionData(sectionId) {
-    if (sectionId === 'sec-dashboard') loadDashboardData();
-    if (sectionId === 'sec-clients') loadClients();
-    if (sectionId === 'sec-tasks') loadTasks();
-    if (sectionId === 'sec-expenses') loadExpenses();
-    if (sectionId === 'sec-salary') loadSalaryForm();
-    if (sectionId === 'sec-movements') loadMovements();
-    if (sectionId === 'sec-reports') generateReport();
-}
-
-// Manual adjustment is a TARGET for Available to Spend. Store the delta needed to reach it.
-async function setAvailableBalance(targetAmount) {
-    const currentMonth = getCurrentMonthYear();
-    const target = Number(targetAmount);
-    if (!Number.isFinite(target)) return;
-
-    const [{ data: salaries }, { data: clients }, { data: expenses }, { data: daily }, { data: latest }] = await Promise.all([
-        supabaseClient.from('salaries').select('amount').eq('month_year', currentMonth).eq('is_received', true),
-        supabaseClient.from('clients').select('total_budget,remaining_budget,total_budget_egp,remaining_budget_egp'),
-        supabaseClient.from('expenses').select('amount').eq('month_year', currentMonth).eq('is_paid', true),
-        supabaseClient.from('daily_expenses').select('amount').gte('created_at', `${currentMonth}-01`),
-        supabaseClient.from('balance_adjustments').select('amount').eq('month_year', currentMonth).order('created_at', { ascending: false }).limit(1)
+/* E-Wallet Manager — clean finance engine */
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const money = n => `ج.م ${Number(n || 0).toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const monthNow = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+  const nextMonth = m => { const [y,mo]=m.split('-').map(Number); const d=new Date(y,mo,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+  const userId = async () => (await supabaseClient.auth.getUser()).data?.user?.id || null;
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('en-GB') : '—';
+  const fmtDateTime = d => d ? new Date(d).toLocaleString('en-GB',{dateStyle:'short',timeStyle:'short'}) : '—';
+  const clientNet = c => c.currency === 'USD' ? Math.max(0,Number(c.total_budget||0)*Number(c.exchange_rate||0)-Number(c.transfer_fee_egp||0)) : Number(c.total_budget||0);
+  const taskEGP = t => Number(t.amount_egp ?? (t.currency==='USD' ? Number(t.cost||0)*Number(t.exchange_rate||0) : Number(t.cost||0)));
+  window.formatMoney = money;
+  async function query(builder){ const r=await builder; if(r.error) throw r.error; return r.data||[]; }
+  async function getCore(month=monthNow()) {
+    const uid=await userId();
+    const [salaries,clients,payments,expenses,daily,adjustments,obligations,movements] = await Promise.all([
+      query(supabaseClient.from('salaries').select('*').eq('user_id',uid).eq('month_year',month)),
+      query(supabaseClient.from('clients').select('*').eq('user_id',uid)),
+      query(supabaseClient.from('client_payments').select('*').eq('user_id',uid)),
+      query(supabaseClient.from('expenses').select('*').eq('user_id',uid).eq('month_year',month)),
+      query(supabaseClient.from('daily_expenses').select('*').eq('user_id',uid).gte('created_at',`${month}-01T00:00:00`).lt('created_at',`${nextMonth(month)}-01T00:00:00`)),
+      query(supabaseClient.from('balance_adjustments').select('*').eq('user_id',uid).eq('month_year',month).order('created_at',{ascending:false}).limit(1)),
+      query(supabaseClient.from('obligations').select('*').eq('user_id',uid)),
+      query(supabaseClient.from('movements').select('*').eq('user_id',uid).order('movement_date',{ascending:false}))
     ]);
-    const salary = (salaries || []).reduce((s, x) => s + Number(x.amount || 0), 0);
-    const clientCash = (clients || []).reduce((s, x) => s + Number(x.total_budget_egp ?? x.total_budget ?? 0) - Number(x.remaining_budget_egp ?? x.remaining_budget ?? 0), 0);
-    const fixed = (expenses || []).reduce((s, x) => s + Number(x.amount || 0), 0);
-    const dailyTotal = (daily || []).reduce((s, x) => s + Number(x.amount || 0), 0);
-    const currentAdjustment = latest?.[0] ? Number(latest[0].amount || 0) : 0;
-    const requiredAdjustment = target - (salary + clientCash + currentAdjustment - fixed - dailyTotal);
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    const { error } = await supabaseClient.from('balance_adjustments').insert([{ amount: currentAdjustment + requiredAdjustment, month_year: currentMonth, created_at: new Date().toISOString(), user_id: user?.id }]);
-    if (!error) loadDashboardData(); else console.error('Error adjusting balance:', error);
-}
-
-document.getElementById('form-adjust-available')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await setAvailableBalance(document.getElementById('custom-available-input').value);
-    document.getElementById('custom-available-input').value = '';
-});
-
-// 3. Daily Expenses Operations
-document.getElementById('form-daily-expense')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const title = document.getElementById('daily-title').value;
-    const amount = Number(document.getElementById('daily-amount').value);
-    const { error } = await supabaseClient.from('daily_expenses').insert([{ title, amount, created_at: new Date().toISOString() }]);
-    if (!error) { document.getElementById('form-daily-expense').reset(); loadDashboardData(); }
-});
-
-async function loadDailyExpenses() {
-    const container = document.getElementById('daily-expenses-list');
-    if (!container) return;
-    const { data } = await supabaseClient.from('daily_expenses').select('*').order('created_at', { ascending: false });
-    container.innerHTML = (data || []).map(item => `<div class="expense-item"><div><strong>${item.title}</strong><small>${new Date(item.created_at).toLocaleString('ar-EG')}</small></div><span>${formatMoney(item.amount)}</span></div>`).join('');
-}
+    return {salaries,clients,payments,expenses,daily,adjustments,obligations,movements};
+  }
+  async function loadDashboard() {
+    const d=await getCore(monthNow());
+    const salary=d.salaries.filter(x=>x.is_received).reduce((s,x)=>s+Number(x.amount||0),0);
+    const collected=d.payments.reduce((s,x)=>s+Number(x.amount_egp||0),0);
+    const pending=d.clients.reduce((s,c)=>s+Math.max(0,clientNet(c)-d.payments.filter(p=>p.client_id===c.id).reduce((a,p)=>a+Number(p.amount_egp||0),0)),0);
+    const fixed=d.expenses.filter(x=>x.is_paid).reduce((s,x)=>s+Number(x.amount||0),0);
+    const daily=d.daily.reduce((s,x)=>s+Number(x.amount||0),0);
+    const adjustment=d.adjustments[0] ? Number(d.adjustments[0].amount||0) : 0;
+    const obligations=d.obligations.filter(x=>!x.is_paid).reduce((s,x)=>s+Number(x.amount||0),0);
+    const loans=d.movements.filter(x=>x.type==='loan'&&x.status==='completed').reduce((s,x)=>s+Number(x.amount_egp||0),0);
+    const available=salary+collected+adjustment-fixed-daily;
+    $('dash-salary').textContent=money(salary); $('dash-clients-income').textContent=money(collected); $('dash-pending-income').textContent=money(pending); $('dash-expenses').textContent=money(fixed); $('dash-daily-expenses').textContent=money(daily); $('dash-available').textContent=money(available); $('dash-obligations').textContent=money(obligations); $('dash-loans-outstanding').textContent=money(loans);
+    await loadDaily();
+  }
+  async function loadDaily() {
+    const uid=await userId(); if(!uid||!$('daily-expenses-list')) return;
+    const m=monthNow(), rows=await query(supabaseClient.from('daily_expenses').select('*').eq('user_id',uid).gte('created_at',`${m}-01T00:00:00`).lt('created_at',`${nextMonth(m)}-01T00:00:00`).order('created_at',{ascending:false}));
+    const today=new Date().toDateString(), todayRows=rows.filter(r=>new Date(r.created_at).toDateString()===today);
+    $('daily-expenses-list').innerHTML=todayRows.length?todayRows.map(r=>`<div class="list-row"><div><strong>${esc(r.title)}</strong><small>${fmtDateTime(r.created_at)}</small></div><div>${money(r.amount)} <button class="btn danger" data-action="delete-daily" data-id="${r.id}">Delete</button></div></div>`).join(''):'<div class="empty">No expenses today.</div>';
+  }
+  async function loadClients() {
+    const uid=await userId(); if(!uid||!$('clients-table-body')) return;
+    const [clients,payments,tasks]=await Promise.all([query(supabaseClient.from('clients').select('*').eq('user_id',uid).order('created_at',{ascending:false})),query(supabaseClient.from('client_payments').select('*').eq('user_id',uid)),query(supabaseClient.from('tasks').select('*').eq('user_id',uid))]);
+    const rows=clients.map(c=>{const cp=payments.filter(p=>p.client_id===c.id),ct=tasks.filter(t=>t.client_id===c.id),net=clientNet(c),collected=cp.reduce((s,p)=>s+Number(p.amount_egp||0),0),work=ct.reduce((s,t)=>s+taskEGP(t),0);return {c,net,collected,owed:Math.max(0,net-collected),workRemaining:Math.max(0,net-work),count:ct.length};});
+    $('clients-table-body').innerHTML=rows.length?rows.map(x=>`<tr><td><strong>${esc(x.c.name)}</strong><small class="muted">${x.c.currency}</small></td><td>${money(x.net)}</td><td>${money(x.collected)}</td><td><strong>${money(x.owed)}</strong></td><td>${money(x.workRemaining)}</td><td>${x.count}</td><td class="row-actions"><button class="btn primary" data-action="add-payment" data-id="${x.c.id}">Payment</button><button class="btn danger" data-action="delete-client" data-id="${x.c.id}">Delete</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No clients yet.</td></tr>';
+  }
+  async function loadTasks() {
+    const uid=await userId(); if(!uid||!$('tasks-table-body')) return;
+    const [tasks,clients]=await Promise.all([query(supabaseClient.from('tasks').select('*').eq('user_id',uid).order('created_at',{ascending:false})),query(supabaseClient.from('clients').select('*').eq('user_id',uid))]);
+    $('tasks-table-body').innerHTML=tasks.length?tasks.map(t=>{const c=clients.find(x=>x.id===t.client_id),ct=tasks.filter(x=>x.client_id===t.client_id),rem=Math.max(0,clientNet(c||{})-ct.reduce((s,x)=>s+taskEGP(x),0));return `<tr><td><strong>${esc(t.title)}</strong></td><td>${esc(c?.name||'Unknown')}</td><td>${money(taskEGP(t))}<small class="muted">${t.currency} ${Number(t.cost).toLocaleString()}</small></td><td><strong>${money(rem)}</strong></td><td><span class="badge ${t.status==='completed'?'ok':'warn'}">${esc(t.status)}</span></td><td class="row-actions">${t.status!=='completed'?`<button class="btn primary" data-action="complete-task" data-id="${t.id}">Complete</button>`:''}<button class="btn danger" data-action="delete-task" data-id="${t.id}">Delete</button></td></tr>`}).join(''):'<tr><td colspan="6" class="empty">No tasks yet.</td></tr>';
+  }
+  async function syncClient(id) {
+    const {data:c,error:ce}=await supabaseClient.from('clients').select('*').eq('id',id).single(); if(ce) throw ce;
+    const tasks=await query(supabaseClient.from('tasks').select('cost,currency,exchange_rate,amount_egp').eq('client_id',id));
+    const used=tasks.reduce((s,t)=>s+taskEGP(t),0), net=clientNet(c), rem=Math.max(0,net-used), rate=c.currency==='USD'?Number(c.exchange_rate||1):1, remainingBudget=c.currency==='USD'&&rate>0?rem/rate:rem;
+    const {error}=await supabaseClient.from('clients').update({remaining_budget:remainingBudget,remaining_budget_egp:rem}).eq('id',id).eq('user_id',c.user_id); if(error) throw error;
+  }
+  async function saveClient(e) {
+    e.preventDefault(); const uid=await userId(),name=$('client-name').value.trim(),currency=$('client-currency').value,total=Number($('client-budget').value),rate=currency==='USD'?Number($('client-rate').value):1,fee=currency==='USD'?Number($('client-fee').value||0):0,collected=Number($('client-collected').value||0);
+    if(!name||!Number.isFinite(total)||total<=0||(currency==='USD'&&rate<=0)) return alert('Enter valid client details.');
+    const net=currency==='USD'?Math.max(0,total*rate-fee):total;
+    const {data,error}=await supabaseClient.from('clients').insert([{user_id:uid,name,currency,total_budget:total,exchange_rate:rate,transfer_fee_egp:fee,remaining_budget:currency==='USD'?net/rate:net,remaining_budget_egp:net}]).select().single(); if(error)return alert(error.message);
+    if(collected>0){const collectedNet=currency==='USD'?Math.max(0,collected*rate-fee):collected;const {error:pe}=await supabaseClient.from('client_payments').insert([{client_id:data.id,user_id:uid,amount:collected,amount_egp:collectedNet,payment_date:new Date().toISOString(),month_year:monthNow(),notes:'Already collected when client was created'}]);if(pe)return alert(pe.message);}
+    closeModal();e.target.reset();await loadAll();
+  }
+  async function addPayment(id) {
+    const {data:c,error}=await supabaseClient.from('clients').select('*').eq('id',id).single();if(error)throw error;
+    openModal(`<h2>Record Client Payment</h2><form id="payment-form"><label>Amount received in ${c.currency}<input id="payment-amount" type="number" min="0.01" step="0.01" required></label>${c.currency==='USD'?`<label>USD → EGP rate<input id="payment-rate" type="number" min="0.0001" step="0.0001" value="${Number(c.exchange_rate||1)}" required></label>`:''}<label>Notes<textarea id="payment-notes"></textarea></label><button class="btn primary">Save Payment</button></form>`);
+    $('payment-form').onsubmit=async e=>{e.preventDefault();const uid=await userId(),amount=Number($('payment-amount').value),rate=c.currency==='USD'?Number($('payment-rate').value):1;const {error}=await supabaseClient.from('client_payments').insert([{client_id:id,user_id:uid,amount,amount_egp:amount*rate,payment_date:new Date().toISOString(),month_year:monthNow(),notes:$('payment-notes').value.trim()}]);if(error)return alert(error.message);closeModal();await loadAll();};
+  }
+  async function saveTask(e){e.preventDefault();const uid=await userId(),cid=$('task-client').value,cost=Number($('task-cost').value),title=$('task-title').value.trim(),currency=$('task-currency').value,rate=currency==='USD'?Number($('task-rate').value):1;if(!cid||!title||cost<=0||rate<=0)return alert('Enter valid task details.');const {data:c,error:ce}=await supabaseClient.from('clients').select('*').eq('id',cid).single();if(ce)throw ce;const tasks=await query(supabaseClient.from('tasks').select('cost,currency,exchange_rate,amount_egp').eq('client_id',cid)),used=tasks.reduce((s,t)=>s+taskEGP(t),0),value=currency==='USD'?cost*rate:cost,rem=clientNet(c)-used;if(value>rem+0.000001)return alert(`Task exceeds the client's work balance. Remaining: ${money(rem)}`);const {error}=await supabaseClient.from('tasks').insert([{client_id:cid,user_id:uid,title,cost,currency,exchange_rate:rate,status:'pending'}]);if(error)return alert(error.message);await syncClient(cid);closeModal();e.target.reset();await loadAll();}
+  async function loadSalary(){const uid=await userId();if(!uid)return;const m=monthNow(),n=nextMonth(m),rows=await query(supabaseClient.from('salaries').select('*').eq('user_id',uid).order('month_year',{ascending:false})),cur=rows.find(x=>x.month_year===m),nx=rows.find(x=>x.month_year===n);$('salary-current-month-label').textContent=m;$('salary-current-amount').textContent=money(cur?.amount);$('salary-current-status').textContent=cur?.is_received?'Received':'Pending';$('salary-current-status').className=`badge ${cur?.is_received?'ok':'warn'}`;$('salary-current-hint').textContent=cur?.is_received?'Confirmed salary counts as available cash.':'Confirm it when the money is actually received.';$('salary-next-month-label').textContent=n;$('salary-next-amount').textContent=money(nx?.amount);$('salary-next-status').textContent=nx?.is_received?'Received':'Pending';$('salary-next-status').className=`badge ${nx?.is_received?'ok':'warn'}`;$('salary-next-hint').textContent=nx?'Next month is planned.':'No plan yet.';$('salary-history-body').innerHTML=rows.length?rows.map(x=>`<tr><td>${esc(x.month_year)}</td><td>${money(x.amount)}</td><td><span class="badge ${x.is_received?'ok':'warn'}">${x.is_received?'Received':'Pending'}</span></td><td class="row-actions">${!x.is_received?`<button class="btn primary" data-action="confirm-salary" data-id="${x.id}">Confirm</button>`:''}<button class="btn danger" data-action="delete-salary" data-id="${x.id}">Delete</button></td></tr>`).join(''):'<tr><td colspan="4" class="empty">No salary records.</td></tr>';}
+  async function saveSalary(received=false){const uid=await userId(),m=$('salary-month').value,a=Number($('salary-amount').value);if(!m||a<=0)return alert('Enter month and amount.');const {data:existing}=await supabaseClient.from('salaries').select('id').eq('user_id',uid).eq('month_year',m).maybeSingle();const payload={amount:a,is_received:received,received_at:received?new Date().toISOString():null};const r=existing?await supabaseClient.from('salaries').update(payload).eq('id',existing.id):await supabaseClient.from('salaries').insert([{...payload,user_id:uid,month_year:m}]);if(r.error)return alert(r.error.message);$('salary-form').reset();await loadAll();}
+  async function confirmSalary(id){const {error}=await supabaseClient.from('salaries').update({is_received:true,received_at:new Date().toISOString()}).eq('id',id);if(error)return alert(error.message);await loadAll();}
+  async function loadExpenses(){const uid=await userId();if(!uid)return;const rows=await query(supabaseClient.from('expenses').select('*').eq('user_id',uid).order('due_date',{ascending:true}));$('expenses-table-body').innerHTML=rows.length?rows.map(x=>`<tr><td>${esc(x.title)}</td><td>${money(x.amount)}</td><td>${esc(x.month_year)}</td><td><span class="badge ${x.is_paid?'ok':'warn'}">${x.is_paid?'Paid':'Pending'}</span></td><td>${fmtDate(x.due_date)}</td><td class="row-actions">${!x.is_paid?`<button class="btn primary" data-action="pay-expense" data-id="${x.id}">Mark Paid</button>`:''}<button class="btn danger" data-action="delete-expense" data-id="${x.id}">Delete</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No fixed expenses.</td></tr>';}
+  async function loadMovements(){const uid=await userId();if(!uid)return;const rows=await query(supabaseClient.from('movements').select('*').eq('user_id',uid).order('movement_date',{ascending:false}));$('movements-table-body').innerHTML=rows.length?rows.map(x=>`<tr><td>${fmtDateTime(x.movement_date)}</td><td>${esc(x.type)}</td><td>${esc(x.title||'—')}</td><td>${money(x.amount_egp)}</td><td><span class="badge ${x.status==='completed'?'ok':x.status==='cancelled'?'danger':'warn'}">${esc(x.status)}</span></td><td><button class="btn danger" data-action="delete-movement" data-id="${x.id}">Delete</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No movements.</td></tr>';}
+  async function loadObligations(){const uid=await userId();if(!uid)return;const rows=await query(supabaseClient.from('obligations').select('*').eq('user_id',uid).order('due_date',{ascending:true}));$('obligations-table-body').innerHTML=rows.length?rows.map(x=>`<tr><td>${fmtDate(x.due_date)}</td><td>${esc(x.title)}</td><td>${money(x.amount)}</td><td>${esc(x.month_year)}</td><td><span class="badge ${x.is_paid?'ok':'warn'}">${x.is_paid?'Paid':'Pending'}</span></td><td class="row-actions">${!x.is_paid?`<button class="btn primary" data-action="pay-obligation" data-id="${x.id}">Mark Paid</button>`:''}<button class="btn danger" data-action="delete-obligation" data-id="${x.id}">Delete</button></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No obligations.</td></tr>';}
+  async function generateReport(){const uid=await userId();if(!uid||!$('report-content'))return;const m=$('report-month').value||monthNow(),d=await getCore(m),salary=d.salaries.filter(x=>x.is_received).reduce((s,x)=>s+Number(x.amount||0),0),collected=d.payments.filter(x=>x.month_year===m).reduce((s,x)=>s+Number(x.amount_egp||0),0),fixed=d.expenses.filter(x=>x.is_paid).reduce((s,x)=>s+Number(x.amount||0),0),daily=d.daily.reduce((s,x)=>s+Number(x.amount||0),0),adj=d.adjustments[0]?Number(d.adjustments[0].amount||0):0,available=salary+collected+adj-fixed-daily,pending=d.clients.reduce((s,c)=>s+Math.max(0,clientNet(c)-d.payments.filter(p=>p.client_id===c.id).reduce((a,p)=>a+Number(p.amount_egp||0),0)),0),ob=d.obligations.filter(x=>!x.is_paid).reduce((s,x)=>s+Number(x.amount||0),0),cards=[['Salary received',salary],['Client payments',collected],['Pending client receivables',pending],['Paid fixed expenses',fixed],['Daily expenses',daily],['Adjustment',adj],['Available to spend',available],['Future obligations',ob]];$('report-content').innerHTML=cards.map(([l,v])=>`<div class="report-card"><span>${l}</span><strong>${money(v)}</strong></div>`).join('');}
+  function openModal(html){$('modal-content').innerHTML=html;$('modal').classList.remove('hidden');} function closeModal(){$('modal').classList.add('hidden');$('modal-content').innerHTML='';} window.closeModal=closeModal;
+  const clientOptions=clients=>clients.map(c=>`<option value="${c.id}">${esc(c.name)} — ${money(clientNet(c))}</option>`).join('');
+  async function openClientModal(){openModal(`<h2>Add Client</h2><form id="client-form"><label>Name<input id="client-name" required></label><label>Currency<select id="client-currency"><option>EGP</option><option>USD</option></select></label><label>Total budget<input id="client-budget" type="number" min="0.01" step="0.01" required></label><div class="form-grid"><label>USD → EGP rate<input id="client-rate" type="number" min="0.0001" step="0.0001" value="50" disabled></label><label>Transfer fee (EGP)<input id="client-fee" type="number" min="0" step="0.01" value="0" disabled></label></div><label>Already collected<input id="client-collected" type="number" min="0" step="0.01" value="0"></label><p class="muted">Already collected becomes a real client payment and is converted to net EGP after the fee.</p><button class="btn primary">Save Client</button></form>`);$('client-currency').onchange=e=>{$('client-rate').disabled=e.target.value!=='USD';$('client-fee').disabled=e.target.value!=='USD';};$('client-form').onsubmit=saveClient;}
+  async function openTaskModal(){const uid=await userId(),clients=await query(supabaseClient.from('clients').select('*').eq('user_id',uid).order('name'));if(!clients.length)return alert('Add a client first.');openModal(`<h2>Add Task</h2><form id="task-form"><label>Client<select id="task-client" required>${clientOptions(clients)}</select></label><label>Task title<input id="task-title" required></label><label>Value<input id="task-cost" type="number" min="0.01" step="0.01" required></label><label>Currency<select id="task-currency"><option>EGP</option><option>USD</option></select></label><label>USD → EGP rate<input id="task-rate" type="number" min="0.0001" step="0.0001" value="50" disabled></label><p class="muted">The task consumes the client's work balance immediately. Completing it never consumes it twice.</p><button class="btn primary">Save Task</button></form>`);$('task-currency').onchange=e=>$('task-rate').disabled=e.target.value!=='USD';$('task-form').onsubmit=saveTask;}
+  function simpleForm(title,fields,submit){openModal(`<h2>${title}</h2><form id="generic-form">${fields}<button class="btn primary">Save</button></form>`);$('generic-form').onsubmit=async e=>{e.preventDefault();await submit();};}
+  function openExpenseModal(){simpleForm('Add Fixed Expense',`<label>Title<input id="expense-title" required></label><div class="form-grid"><label>Amount<input id="expense-amount" type="number" min="0.01" step="0.01" required></label><label>Month<input id="expense-month" type="month" value="${monthNow()}" required></label></div><label>Due date<input id="expense-due" type="date"></label><label><input id="expense-paid" type="checkbox"> Mark as paid now</label>`,async()=>{const uid=await userId(),{error}=await supabaseClient.from('expenses').insert([{user_id:uid,title:$('expense-title').value.trim(),amount:Number($('expense-amount').value),month_year:$('expense-month').value,due_date:$('expense-due').value||null,is_paid:$('expense-paid').checked}]);if(error)return alert(error.message);closeModal();await loadAll();});}
+  function openMovementModal(){simpleForm('Add Money Movement',`<label>Type<select id="movement-type"><option>deposit</option><option>withdrawal</option><option>transfer</option><option>loan</option><option>customer_payment</option><option>other</option></select></label><label>Title<input id="movement-title"></label><label>Amount<input id="movement-amount" type="number" min="0.01" step="0.01" required></label><label>Currency<select id="movement-currency"><option>EGP</option><option>USD</option></select></label><label>USD → EGP rate<input id="movement-rate" type="number" min="0.0001" step="0.0001" value="50"></label><label>Fee (EGP)<input id="movement-fee" type="number" min="0" step="0.01" value="0"></label>`,async()=>{const uid=await userId(),currency=$('movement-currency').value,amount=Number($('movement-amount').value),rate=currency==='USD'?Number($('movement-rate').value):1,fee=Number($('movement-fee').value||0),{error}=await supabaseClient.from('movements').insert([{user_id:uid,type:$('movement-type').value,title:$('movement-title').value.trim(),amount,currency,exchange_rate:rate,fee_egp:fee,status:'completed',movement_date:new Date().toISOString()}]);if(error)return alert(error.message);closeModal();await loadAll();});}
+  function openObligationModal(){simpleForm('Add Future Obligation',`<label>Title<input id="ob-title" required></label><div class="form-grid"><label>Amount<input id="ob-amount" type="number" min="0.01" step="0.01" required></label><label>Due date<input id="ob-date" type="date" required></label></div><label>Month<input id="ob-month" type="month" value="${monthNow()}" required></label><label>Notes<textarea id="ob-notes"></textarea></label>`,async()=>{const uid=await userId(),{error}=await supabaseClient.from('obligations').insert([{user_id:uid,title:$('ob-title').value.trim(),amount:Number($('ob-amount').value),due_date:$('ob-date').value,month_year:$('ob-month').value,notes:$('ob-notes').value.trim(),is_paid:false}]);if(error)return alert(error.message);closeModal();await loadAll();});}
+  async function setAvailableTarget(e){e.preventDefault();const uid=await userId(),target=Number($('custom-available-input').value),m=monthNow();if(!Number.isFinite(target))return;const d=await getCore(m),salary=d.salaries.filter(x=>x.is_received).reduce((s,x)=>s+Number(x.amount||0),0),collected=d.payments.reduce((s,x)=>s+Number(x.amount_egp||0),0),fixed=d.expenses.filter(x=>x.is_paid).reduce((s,x)=>s+Number(x.amount||0),0),daily=d.daily.reduce((s,x)=>s+Number(x.amount||0),0),adjustment=target-(salary+collected-fixed-daily),latest=d.adjustments[0],r=latest?await supabaseClient.from('balance_adjustments').update({amount:adjustment,created_at:new Date().toISOString()}).eq('id',latest.id):await supabaseClient.from('balance_adjustments').insert([{user_id:uid,amount:adjustment,month_year:m}]);if(r.error)return alert(r.error.message);$('custom-available-input').value='';await loadDashboard();await generateReport();}
+  async function loadAll(){await Promise.all([loadDashboard(),loadClients(),loadTasks(),loadSalary(),loadExpenses(),loadMovements(),loadObligations()]);await generateReport();}
+  document.addEventListener('click',async e=>{const n=e.target.closest('[data-action]');if(!n)return;const id=n.dataset.id,action=n.dataset.action;try{if(action==='delete-daily')await supabaseClient.from('daily_expenses').delete().eq('id',id);if(action==='delete-client'){if(!confirm('Delete this client and all its tasks/payments?'))return;await supabaseClient.from('clients').delete().eq('id',id);}if(action==='add-payment')return addPayment(id);if(action==='delete-task'){if(!confirm('Delete task? Its value returns to the client work balance.'))return;const {data:t,error:te}=await supabaseClient.from('tasks').select('client_id').eq('id',id).single();if(te)throw te;await supabaseClient.from('tasks').delete().eq('id',id);await syncClient(t.client_id);}if(action==='complete-task')await supabaseClient.from('tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',id);if(action==='confirm-salary')await confirmSalary(id);if(action==='delete-salary')await supabaseClient.from('salaries').delete().eq('id',id);if(action==='pay-expense')await supabaseClient.from('expenses').update({is_paid:true}).eq('id',id);if(action==='delete-expense')await supabaseClient.from('expenses').delete().eq('id',id);if(action==='delete-movement')await supabaseClient.from('movements').delete().eq('id',id);if(action==='pay-obligation')await supabaseClient.from('obligations').update({is_paid:true,paid_at:new Date().toISOString()}).eq('id',id);if(action==='delete-obligation')await supabaseClient.from('obligations').delete().eq('id',id);await loadAll();}catch(err){console.error(err);alert(err.message||'Operation failed.');}});
+  document.addEventListener('DOMContentLoaded',()=>{$('open-add-client-modal').onclick=openClientModal;$('open-add-task-modal').onclick=openTaskModal;$('open-add-expense-modal').onclick=openExpenseModal;$('open-add-movement-modal').onclick=openMovementModal;$('open-add-obligation-modal').onclick=openObligationModal;$('form-adjust-available').onsubmit=setAvailableTarget;$('form-daily-expense').onsubmit=async e=>{e.preventDefault();const uid=await userId(),{error}=await supabaseClient.from('daily_expenses').insert([{user_id:uid,title:$('daily-title').value.trim(),amount:Number($('daily-amount').value)}]);if(error)return alert(error.message);e.target.reset();await loadDashboard();};$('modal-close').onclick=closeModal;$('modal').onclick=e=>{if(e.target.id==='modal')closeModal();};$('report-month').value=monthNow();$('report-month').onchange=generateReport;$('btn-save-salary').onclick=e=>{e.preventDefault();saveSalary(false);};$('btn-confirm-salary').onclick=()=>saveSalary(true);$('btn-confirm-current-salary').onclick=async()=>{const uid=await userId(),m=monthNow(),{data:row,error}=await supabaseClient.from('salaries').select('id').eq('user_id',uid).eq('month_year',m).maybeSingle();if(error)return alert(error.message);if(!row)return alert('Set this month salary first.');await confirmSalary(row.id);};$('btn-edit-next-salary').onclick=()=>{$('salary-month').value=nextMonth(monthNow());$('salary-amount').focus();};$('mobile-menu-toggle').onclick=()=>$('app-sidebar').classList.toggle('open');document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.content-section').forEach(s=>s.classList.add('hidden'));$(b.dataset.target).classList.remove('hidden');$('page-title').textContent=b.textContent.replace(/^[^A-Za-z]+/,'').trim();$('app-sidebar').classList.remove('open');});});
+  window.loadDashboardData=loadDashboard;window.loadClients=loadClients;window.loadTasks=loadTasks;window.loadExpenses=loadExpenses;window.loadMovements=loadMovements;window.loadSalaryForm=loadSalary;window.loadObligations=loadObligations;window.initializeMovementStorage=async()=>{};window.initializeRecurringObligations=async()=>{};
+})();

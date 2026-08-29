@@ -1,64 +1,10 @@
-(() => {
-  'use strict';
-  const $ = id => document.getElementById(id);
-  const num = v => Number(v || 0);
-  const monthNow = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
-  const nextMonth = m => { const [y,mo]=m.split('-').map(Number); const d=new Date(y,mo,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
-  const uid = async () => (await supabaseClient.auth.getUser()).data?.user?.id;
-  const refresh = async () => {
-    if (typeof loadAll === 'function') return loadAll();
-    await Promise.all([
-      typeof loadDashboardData==='function' ? loadDashboardData() : Promise.resolve(),
-      typeof loadClients==='function' ? loadClients() : Promise.resolve(),
-      typeof loadTasks==='function' ? loadTasks() : Promise.resolve(),
-      typeof loadSalary==='function' ? loadSalary() : Promise.resolve(),
-      typeof loadExpenses==='function' ? loadExpenses() : Promise.resolve(),
-      typeof loadMovements==='function' ? loadMovements() : Promise.resolve(),
-      typeof loadObligations==='function' ? loadObligations() : Promise.resolve(),
-      typeof loadReports==='function' ? loadReports() : Promise.resolve()
-    ]);
-  };
-  const open = () => $('modal')?.classList.remove('hidden');
-  const close = () => $('modal')?.classList.add('hidden');
-
-  async function addFixedExpense() {
-    const box=$('modal-content'); if(!box)return;
-    box.innerHTML=`<h2>Add Fixed Expense</h2><form id="fixed-expense-form">
-      <label>Expense name<input id="fx-title" required></label>
-      <div class="form-grid"><label>Amount<input id="fx-amount" type="number" min="0.01" step="0.01" required></label>
-      <label>Month<input id="fx-month" type="month" value="${monthNow()}" required></label></div>
-      <label>Due date<input id="fx-due" type="date"></label>
-      <label class="check-row"><input id="fx-paid" type="checkbox"> Paid now</label>
-      <button class="btn primary" type="submit">Save Expense</button>
-    </form>`;
-    open();
-    $('fixed-expense-form').onsubmit=async e=>{
-      e.preventDefault();
-      const user=await uid();
-      const {error}=await supabaseClient.from('expenses').insert([{
-        user_id:user,title:$('fx-title').value.trim(),amount:num($('fx-amount').value),
-        month_year:$('fx-month').value,due_date:$('fx-due').value||null,is_paid:$('fx-paid').checked
-      }]);
-      if(error){alert(error.message);return;}
-      close(); await refresh();
-    };
-  }
-
-  async function addDailyExpense(e) {
-    e.preventDefault();
-    const title=$('daily-title')?.value.trim(), amount=num($('daily-amount')?.value);
-    if(!title || amount<=0){alert('Enter a valid daily expense.');return;}
-    const {error}=await supabaseClient.from('daily_expenses').insert([{user_id:await uid(),title,amount}]);
-    if(error){alert(error.message);return;}
-    e.target.reset(); await refresh();
-  }
-
-  function wire() {
-    const fx=$('open-add-expense-modal'); if(fx) fx.onclick=addFixedExpense;
-    const daily=$('form-daily-expense'); if(daily){ daily.onsubmit=addDailyExpense; }
-    const mc=$('modal-close'); if(mc) mc.onclick=close;
-    const modal=$('modal'); if(modal) modal.onclick=e=>{if(e.target===modal)close();};
-  }
-  document.addEventListener('DOMContentLoaded',wire);
-  window.financeActionsWire=wire;
-})();
+(()=>{'use strict';const $=id=>document.getElementById(id),num=v=>Number(v||0),monthNow=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`},nextMonth=m=>{const [y,mo]=m.split('-').map(Number),d=new Date(y,mo,1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`},uid=async()=> (await supabaseClient.auth.getUser()).data?.user?.id,refresh=async()=>{if(typeof loadAll==='function')return loadAll()};const open=()=>$('modal')?.classList.remove('hidden'),close=()=>$('modal')?.classList.add('hidden');
+function form(title,fields,submit){const b=$('modal-content');if(!b)return;b.innerHTML=`<h2>${title}</h2><form id="action-form">${fields}<div class="actions"><button class="btn primary" type="submit">Save</button><button class="btn secondary" type="button" id="cancel-action">Cancel</button></div></form>`;open();$('cancel-action').onclick=close;$('action-form').onsubmit=submit}
+async function addClient(){form('Add Client',`<label>Name<input id="c-name" required></label><div class="form-grid"><label>Currency<select id="c-currency"><option>EGP</option><option>USD</option></select></label><label>Total Budget<input id="c-budget" type="number" step="0.01" min="0" required></label><label>Exchange Rate<input id="c-rate" type="number" step="0.0001" value="1" required></label><label>Transfer Fee (EGP)<input id="c-fee" type="number" step="0.01" value="0"></label></div>`,async e=>{e.preventDefault();const u=await uid(),currency=$('c-currency').value,b=num($('c-budget').value),r=num($('c-rate').value)||1,fee=num($('c-fee').value);const {error}=await supabaseClient.from('clients').insert([{user_id:u,name:$('c-name').value.trim(),currency,total_budget:b,exchange_rate:r,transfer_fee_egp:fee,remaining_budget_egp:currency==='USD'?Math.max(0,b*r-fee):b}]);if(error)return alert(error.message);close();await refresh()})}
+async function addTask(){const clients=await (async()=>{const u=await uid();const r=await supabaseClient.from('clients').select('id,name').eq('user_id',u);return r.data||[]})();form('Add Task',`<label>Client<select id="t-client" required><option value="">Select client</option>${clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}</select></label><label>Task title<input id="t-title" required></label><div class="form-grid"><label>Value<input id="t-cost" type="number" min="0.01" step="0.01" required></label><label>Currency<select id="t-currency"><option>EGP</option><option>USD</option></select></label><label>Exchange Rate<input id="t-rate" type="number" min="0.0001" step="0.0001" value="1"></label></div>`,async e=>{e.preventDefault();const u=await uid(),currency=$('t-currency').value,cost=num($('t-cost').value),rate=num($('t-rate').value)||1;const {error}=await supabaseClient.from('tasks').insert([{user_id:u,client_id:$('t-client').value,title:$('t-title').value.trim(),cost,currency,exchange_rate:rate,status:'pending'}]);if(error)return alert(error.message);close();await refresh()})}
+async function addFixedExpense(){form('Add Fixed Expense',`<label>Expense name<input id="fx-title" required></label><div class="form-grid"><label>Amount<input id="fx-amount" type="number" min="0.01" step="0.01" required></label><label>Month<input id="fx-month" type="month" value="${monthNow()}" required></label></div><label>Due date<input id="fx-due" type="date"></label><label class="check-row"><input id="fx-paid" type="checkbox"> Paid now</label>`,async e=>{e.preventDefault();const {error}=await supabaseClient.from('expenses').insert([{user_id:await uid(),title:$('fx-title').value.trim(),amount:num($('fx-amount').value),month_year:$('fx-month').value,due_date:$('fx-due').value||null,is_paid:$('fx-paid').checked}]);if(error)return alert(error.message);close();await refresh()})}
+async function addObligation(){form('Add Obligation',`<label>Title<input id="o-title" required></label><div class="form-grid"><label>Amount<input id="o-amount" type="number" min="0.01" step="0.01" required></label><label>Due date<input id="o-due" type="date" required></label><label>Month<input id="o-month" type="month" value="${monthNow()}" required></label></div><label>Notes<textarea id="o-notes"></textarea></label>`,async e=>{e.preventDefault();const {error}=await supabaseClient.from('obligations').insert([{user_id:await uid(),title:$('o-title').value.trim(),amount:num($('o-amount').value),due_date:$('o-due').value,month_year:$('o-month').value,is_paid:false,notes:$('o-notes').value.trim()}]);if(error)return alert(error.message);close();await refresh()})}
+async function addDailyExpense(e){e.preventDefault();const title=$('daily-title')?.value.trim(),amount=num($('daily-amount')?.value);if(!title||amount<=0)return alert('Enter a valid daily expense.');const {error}=await supabaseClient.from('daily_expenses').insert([{user_id:await uid(),title,amount}]);if(error)return alert(error.message);e.target.reset();await refresh()}
+async function editRow(table,id){const {data,error}=await supabaseClient.from(table).select('*').eq('id',id).single();if(error)return alert(error.message);const specs={clients:`<label>Name<input id="e-name" value="${data.name||''}" required></label><div class="form-grid"><label>Currency<select id="e-currency"><option ${data.currency==='EGP'?'selected':''}>EGP</option><option ${data.currency==='USD'?'selected':''}>USD</option></select></label><label>Total Budget<input id="e-budget" type="number" step="0.01" value="${data.total_budget||0}"></label><label>Exchange Rate<input id="e-rate" type="number" step="0.0001" value="${data.exchange_rate||1}"></label><label>Transfer Fee<input id="e-fee" type="number" step="0.01" value="${data.transfer_fee_egp||0}"></label></div>`,tasks:`<label>Title<input id="e-title" value="${data.title||''}" required></label><div class="form-grid"><label>Value<input id="e-cost" type="number" step="0.01" value="${data.cost||0}"></label><label>Currency<select id="e-currency"><option ${data.currency==='EGP'?'selected':''}>EGP</option><option ${data.currency==='USD'?'selected':''}>USD</option></select></label><label>Exchange Rate<input id="e-rate" type="number" step="0.0001" value="${data.exchange_rate||1}"></label><label>Status<select id="e-status">${['pending','in_progress','completed','cancelled'].map(x=>`<option ${data.status===x?'selected':''}>${x}</option>`).join('')}</select></label></div>`,expenses:`<label>Title<input id="e-title" value="${data.title||''}" required></label><label>Amount<input id="e-amount" type="number" step="0.01" value="${data.amount||0}"></label><label>Month<input id="e-month" type="month" value="${data.month_year||monthNow()}"></label><label>Due date<input id="e-due" type="date" value="${data.due_date||''}"></label><label class="check-row"><input id="e-paid" type="checkbox" ${data.is_paid?'checked':''}> Paid</label>`,obligations:`<label>Title<input id="e-title" value="${data.title||''}" required></label><label>Amount<input id="e-amount" type="number" step="0.01" value="${data.amount||0}"></label><label>Due date<input id="e-due" type="date" value="${data.due_date||''}"></label><label>Month<input id="e-month" type="month" value="${data.month_year||monthNow()}"></label><label>Notes<textarea id="e-notes">${data.notes||''}</textarea></label>`};const f=specs[table];if(!f)return alert('Edit is not available for this item yet.');form('Edit',f,async e=>{e.preventDefault();let patch={};if(table==='clients'){const c=$('e-currency').value,b=num($('e-budget').value),r=num($('e-rate').value)||1,fee=num($('e-fee').value);patch={name:$('e-name').value.trim(),currency:c,total_budget:b,exchange_rate:r,transfer_fee_egp:fee,remaining_budget_egp:c==='USD'?Math.max(0,b*r-fee):b}}else if(table==='tasks')patch={title:$('e-title').value.trim(),cost:num($('e-cost').value),currency:$('e-currency').value,exchange_rate:num($('e-rate').value)||1,status:$('e-status').value};else patch={title:$('e-title').value.trim(),amount:num($('e-amount').value),month_year:$('e-month').value,due_date:$('e-due').value||null,...(table==='expenses'?{is_paid:$('e-paid').checked}:{notes:$('e-notes').value.trim()})};const {error:er}=await supabaseClient.from(table).update(patch).eq('id',id).eq('user_id',await uid());if(er)return alert(er.message);close();await refresh()})}
+async function del(table,id){if(!confirm('Delete this item?'))return;const {error}=await supabaseClient.from(table).delete().eq('id',id).eq('user_id',await uid());if(error)return alert(error.message);await refresh()}
+function wire(){[['open-add-client-modal',addClient],['open-add-task-modal',addTask],['open-add-expense-modal',addFixedExpense],['open-add-obligation-modal',addObligation]].forEach(([id,fn])=>{const b=$(id);if(b)b.onclick=fn});const d=$('form-daily-expense');if(d)d.onsubmit=addDailyExpense;const mc=$('modal-close');if(mc)mc.onclick=close;document.onclick=async e=>{const b=e.target.closest('[data-action]');if(!b)return;const a=b.dataset.action;if(a==='report'&&typeof openReport==='function')return openReport(b.dataset.id);if(a==='del')return del(b.dataset.table,b.dataset.id);if(a==='edit')return editRow(b.dataset.table,b.dataset.id);if(a==='complete'){const {error}=await supabaseClient.from('tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',b.dataset.id).eq('user_id',await uid());if(error)alert(error.message);else await refresh()}if(a==='expense-ok'){const {error}=await supabaseClient.from('expenses').update({is_paid:true}).eq('id',b.dataset.id).eq('user_id',await uid());if(error)alert(error.message);else await refresh()}if(a==='ob-ok'){const {error}=await supabaseClient.from('obligations').update({is_paid:true,paid_at:new Date().toISOString()}).eq('id',b.dataset.id).eq('user_id',await uid());if(error)alert(error.message);else await refresh()}})}document.addEventListener('DOMContentLoaded',wire);window.financeActionsWire=wire;})();

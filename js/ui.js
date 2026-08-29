@@ -1,119 +1,12 @@
 // ==========================================
 // إدارة الواجهة (UI Navigation & Modals)
 // ==========================================
-
-// 1. التنقل بين الأقسام عبر Sidebar
-const navItems = document.querySelectorAll('.nav-item');
-const contentSections = document.querySelectorAll('.content-section');
-const appSidebar = document.getElementById('app-sidebar');
-const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
-const mobileNavOverlay = document.getElementById('mobile-nav-overlay');
-
-function setMobileMenu(open) {
-    if (!appSidebar || !mobileMenuToggle) return;
-    const shouldOpen = Boolean(open);
-    appSidebar.classList.toggle('mobile-menu-open', shouldOpen);
-    appSidebar.setAttribute('aria-hidden', String(!shouldOpen));
-    mobileMenuToggle.setAttribute('aria-expanded', String(shouldOpen));
-    mobileMenuToggle.setAttribute('aria-label', shouldOpen ? 'Close navigation menu' : 'Open navigation menu');
-    const icon = mobileMenuToggle.querySelector('i');
-    if (icon) {
-        icon.classList.toggle('fa-bars', !shouldOpen);
-        icon.classList.toggle('fa-xmark', shouldOpen);
-    }
-    if (mobileNavOverlay) {
-        mobileNavOverlay.classList.toggle('hidden', !shouldOpen);
-        mobileNavOverlay.setAttribute('aria-hidden', String(!shouldOpen));
-    }
-    document.body.classList.toggle('mobile-nav-is-open', shouldOpen);
-}
-
-// Keep the drawer closed on first load and provide a reliable keyboard escape.
-setMobileMenu(false);
-
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && appSidebar?.classList.contains('mobile-menu-open')) {
-        setMobileMenu(false);
-        mobileMenuToggle?.focus();
-    }
-});
-
-mobileMenuToggle?.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setMobileMenu(!appSidebar?.classList.contains('mobile-menu-open'));
-});
-mobileNavOverlay?.addEventListener('click', () => setMobileMenu(false));
-
-navItems.forEach(item => {
-    item.addEventListener('click', () => {
-        // إزالة التنشيط من جميع الأزرار
-        navItems.forEach(nav => nav.classList.remove('active'));
-        // إضافة التنشيط للزر الحالي
-        item.classList.add('active');
-
-        // إخفاء جميع الأقسام
-        contentSections.forEach(sec => sec.classList.add('hidden'));
-
-        // إظهار القسم المطلوب
-        const targetId = item.getAttribute('data-target');
-        const targetSection = document.getElementById(targetId);
-        if (targetSection) {
-            targetSection.classList.remove('hidden');
-        }
-
-        // إعادة تحميل البيانات الخاصة بالقسم المحدد
-        if (typeof refreshSectionData === 'function') {
-            refreshSectionData(targetId);
-        }
-        setMobileMenu(false);
-    });
-});
-
-window.addEventListener('resize', () => {
-    if (window.innerWidth > 768) setMobileMenu(false);
-});
-
-window.setMobileMenu = setMobileMenu;
-
-// 2. إدارة النوافذ المنبثقة (Modals)
-function setupModal(openBtnId, modalId) {
-    const openBtn = document.getElementById(openBtnId);
-    const modal = document.getElementById(modalId);
-    
-    if (!openBtn || !modal) return;
-
-    // فتح المودال
-    openBtn.addEventListener('click', () => {
-        modal.classList.remove('hidden');
-    });
-
-    // إغلاق المودال عند الضغط على زر الإلغاء أو أزرار close-modal
-    const closeBtns = modal.querySelectorAll('.close-modal');
-    closeBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            modal.classList.add('hidden');
-        });
-    });
-
-    // إغلاق المودال عند الضغط خارجه
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            modal.classList.add('hidden');
-        }
-    });
-}
-
-// تفعيل المودالات للنماذج المختلفة
-setupModal('open-add-client-modal', 'modal-client');
-setupModal('open-add-task-modal', 'modal-task');
-setupModal('open-add-expense-modal', 'modal-expense');
-setupModal('open-add-movement-modal', 'modal-movement');
-
-// دالة إغلاق المودال برمجياً بعد الحفظ
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
+const navItems=document.querySelectorAll('.nav-item');
+const contentSections=document.querySelectorAll('.content-section');
+const appSidebar=document.getElementById('app-sidebar');
+const mobileMenuToggle=document.getElementById('mobile-menu-toggle');
+const mobileNavOverlay=document.getElementById('mobile-nav-overlay');
+function setMobileMenu(open){if(!appSidebar||!mobileMenuToggle)return;const o=Boolean(open);appSidebar.classList.toggle('mobile-menu-open',o);appSidebar.setAttribute('aria-hidden',String(!o));mobileMenuToggle.setAttribute('aria-expanded',String(o));mobileMenuToggle.setAttribute('aria-label',o?'Close navigation menu':'Open navigation menu');const i=mobileMenuToggle.querySelector('i');if(i){i.classList.toggle('fa-bars',!o);i.classList.toggle('fa-xmark',o)}if(mobileNavOverlay){mobileNavOverlay.classList.toggle('hidden',!o);mobileNavOverlay.setAttribute('aria-hidden',String(!o))}document.body.classList.toggle('mobile-nav-is-open',o)}
+setMobileMenu(false);document.addEventListener('keydown',e=>{if(e.key==='Escape'&&appSidebar?.classList.contains('mobile-menu-open')){setMobileMenu(false);mobileMenuToggle?.focus()}});mobileMenuToggle?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setMobileMenu(!appSidebar?.classList.contains('mobile-menu-open'))});mobileNavOverlay?.addEventListener('click',()=>setMobileMenu(false));navItems.forEach(item=>item.addEventListener('click',()=>{navItems.forEach(n=>n.classList.remove('active'));item.classList.add('active');contentSections.forEach(s=>s.classList.add('hidden'));const id=item.getAttribute('data-target');document.getElementById(id)?.classList.remove('hidden');if(typeof refreshSectionData==='function')refreshSectionData(id);setMobileMenu(false)}));window.addEventListener('resize',()=>{if(innerWidth>768)setMobileMenu(false)});window.setMobileMenu=setMobileMenu;
+function setupModal(openBtnId,modalId){const b=document.getElementById(openBtnId),m=document.getElementById(modalId);if(!b||!m)return;b.addEventListener('click',()=>m.classList.remove('hidden'));m.querySelectorAll('.close-modal').forEach(x=>x.addEventListener('click',()=>m.classList.add('hidden')));m.addEventListener('click',e=>{if(e.target===m)m.classList.add('hidden')})}setupModal('open-add-client-modal','modal-client');setupModal('open-add-task-modal','modal-task');setupModal('open-add-expense-modal','modal-expense');setupModal('open-add-movement-modal','modal-movement');function closeModal(id){document.getElementById(id)?.classList.add('hidden')}
+window.addEventListener('load',()=>{const s=document.createElement('script');s.src='js/finance-fixes.js?v=20260829-3';s.onload=()=>{const p=document.createElement('script');p.src='js/finance-fixes-patch.js?v=20260829-3';p.onload=()=>{const r=document.createElement('script');r.src='js/finance-report-fix.js?v=20260829-1';r.onload=()=>{const c=document.createElement('script');c.src='js/finance-consistency-fix.js?v=20260829-1';document.body.appendChild(c)};document.body.appendChild(r)};document.body.appendChild(p)};document.body.appendChild(s)},{once:true});

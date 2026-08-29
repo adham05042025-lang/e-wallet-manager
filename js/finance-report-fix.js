@@ -1,10 +1,14 @@
-/* Finance report fix v1 */
+/* Finance report fix v2 */
 (function () {
     'use strict';
 
     const money = value => `ج.م ${Number(value || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 })}`;
     const monthNow = () => new Date().toISOString().slice(0, 7);
-    const monthRange = month => ({ start: `${month}-01`, end: `${month}-32` });
+    const monthRange = month => {
+        const [year, monthNumber] = month.split('-').map(Number);
+        const next = new Date(year, monthNumber, 1);
+        return { start: `${month}-01`, end: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01` };
+    };
 
     function netBudgetEGP(client) {
         if (client.currency === 'USD') {
@@ -22,7 +26,7 @@
             supabaseClient.from('expenses').select('amount').eq('month_year', month).eq('is_paid', true),
             supabaseClient.from('daily_expenses').select('amount').gte('created_at', range.start).lt('created_at', range.end),
             supabaseClient.from('clients').select('id,name,total_budget,total_budget_egp,currency,exchange_rate,transfer_fee_egp'),
-            supabaseClient.from('client_payments').select('client_id,amount_egp').eq('month_year', month),
+            supabaseClient.from('client_payments').select('client_id,amount_egp,month_year'),
             supabaseClient.from('balance_adjustments').select('amount').eq('month_year', month).order('created_at', { ascending: false }).limit(1)
         ]);
 
@@ -32,12 +36,16 @@
         const recurring = typeof recurringPaidExpensesTotal === 'function' ? recurringPaidExpensesTotal(month) : 0;
         const adjustment = adjustments?.[0] ? Number(adjustments[0].amount || 0) : 0;
         const paymentMap = (payments || []).reduce((m, p) => {
-            m[p.client_id] = (m[p.client_id] || 0) + Number(p.amount_egp || 0);
+            const id = p.client_id;
+            m[id] ||= { lifetimeNetEgp: 0, monthNetEgp: 0 };
+            const value = Number(p.amount_egp || 0);
+            m[id].lifetimeNetEgp += value;
+            if (p.month_year === month) m[id].monthNetEgp += value;
             return m;
         }, {});
         const clientRows = clients || [];
-        const collectedClients = clientRows.reduce((s, c) => s + (paymentMap[c.id] || 0), 0);
-        const receivables = clientRows.reduce((s, c) => s + Math.max(0, netBudgetEGP(c) - (paymentMap[c.id] || 0)), 0);
+        const collectedClients = clientRows.reduce((s, c) => s + (paymentMap[c.id]?.monthNetEgp || 0), 0);
+        const receivables = clientRows.reduce((s, c) => s + Math.max(0, netBudgetEGP(c) - (paymentMap[c.id]?.lifetimeNetEgp || 0)), 0);
         const movements = typeof getMovementSummary === 'function' ? getMovementSummary() : { cashImpact: 0, customerPending: 0, heldCustomerFunds: 0, loansOutstanding: 0, obligations: 0 };
         const available = salary + collectedClients + adjustment + Number(movements.cashImpact || 0) - fixed - recurring - dailyTotal;
 
